@@ -1,0 +1,19 @@
+// IO.h
+
+#ifndef IO_H
+#define IO_H
+
+enum OpenMode_Enum
+{
+    OPEN_MODE_CREATE_ONLY,
+    OPEN_MODE_CREATE_OR_OPEN,
+    OPEN_MODE_CREATE_OR_TRUNCATE,
+    OPEN_MODE_OPEN_ONLY,
+    OPEN_MODE_TRUNCATE_ONLY
+};
+
+#define IO_READ_ACCESS 1
+#define IO_WRITE_ACCESS 2
+#define IO_RW_ACCESS 3
+
+#endif // IO_H
