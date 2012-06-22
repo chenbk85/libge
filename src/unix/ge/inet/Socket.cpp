@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <climits>
 #include <cstring>
+#include <unistd.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>

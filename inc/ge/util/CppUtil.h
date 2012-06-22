@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <new>
+#include <utility>
 
 /*
  * Namespace for simple C++ utility functions.
@@ -66,7 +67,6 @@ namespace CppUtil
         new (target) T(sourceObj);
     }
 
-#ifdef HAVE_RVALUE
     /*
      * Move constructs the object at the passed location, using the passed
      * value. The location should either be uninitialized or have been
@@ -77,7 +77,6 @@ namespace CppUtil
     {
         new (target) T(std::forward<T&&>(sourceObj));
     }
-#endif
 
     /*
      * Destroys the object at the passed location.

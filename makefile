@@ -2,7 +2,7 @@
 
 
 CC := g++
-CCFLAGS := -std=c++0x -O2 -Iinc -Iinc/unix
+CCFLAGS := -std=c++11 -O2 -Iinc -Iinc/unix
 LDFLAGS := -lpthread
 
 RM := rm -f

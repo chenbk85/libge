@@ -6,6 +6,7 @@
 #include <ge/common.h>
 
 #include <cassert>
+#include <utility>
 
 /*
  * Doubly linked list.
@@ -420,14 +421,14 @@ DLinkedList<T>::ConstIterator::ConstIterator(typename DLinkedList<T>::Node* node
 }
 
 template <typename T>
-DLinkedList<T>::ConstIterator::ConstIterator(typename const DLinkedList<T>::ConstIterator& other) :
+DLinkedList<T>::ConstIterator::ConstIterator(const DLinkedList<T>::ConstIterator& other) :
     m_node(other.m_node)
 {
 }
 
 template <typename T>
 typename DLinkedList<T>::ConstIterator&
-    DLinkedList<T>::ConstIterator::operator=(typename const DLinkedList<T>::ConstIterator& other)
+    DLinkedList<T>::ConstIterator::operator=(const DLinkedList<T>::ConstIterator& other)
 {
     m_node = other.m_node;
     return *this;
@@ -483,16 +484,16 @@ DLinkedList<T>::Iterator::Iterator(typename DLinkedList<T>::Node* node) :
 }
 
 template <typename T>
-DLinkedList<T>::Iterator::Iterator(typename const DLinkedList<T>::Iterator& other) :
+DLinkedList<T>::Iterator::Iterator(const DLinkedList<T>::Iterator& other) :
     ConstIterator(other.m_node)
 {
 }
 
 template <typename T>
 typename DLinkedList<T>::Iterator&
-    DLinkedList<T>::Iterator::operator=(typename const DLinkedList<T>::Iterator& other)
+    DLinkedList<T>::Iterator::operator=(const DLinkedList<T>::Iterator& other)
 {
-    m_node = other.m_node;
+    this->m_node = other.m_node;
     return *this;
 }
 
@@ -529,12 +530,12 @@ void DLinkedList<T>::Iterator::insert(const T& value)
         throw;
     }
 
-    Node* oldPrev = m_node->m_prev;
+    Node* oldPrev = this->m_node->m_prev;
     
     newNode->m_prev = oldPrev;
     oldPrev->m_next = newNode;
-    newNode->m_next = m_node;
-    m_node->m_prev = newNode;
+    newNode->m_next = this->m_node;
+    this->m_node->m_prev = newNode;
 }
 
 template <typename T>
@@ -543,37 +544,37 @@ void DLinkedList<T>::Iterator::insert(T&& value)
     Node* newNode = new Node();
     newNode->m_data = std::forward(value);
 
-    Node* oldPrev = m_node->m_prev;
+    Node* oldPrev = this->m_node->m_prev;
     
     newNode->m_prev = oldPrev;
     oldPrev->m_next = newNode;
-    newNode->m_next = m_node;
-    m_node->m_prev = newNode;
+    newNode->m_next = this->m_node;
+    this->m_node->m_prev = newNode;
 }
 
 template <typename T>
 void DLinkedList<T>::Iterator::remove()
 {
-    Node* oldNext = m_node->m_next;
-    Node* oldPrev = m_node->m_prev;
+    Node* oldNext = this->m_node->m_next;
+    Node* oldPrev = this->m_node->m_prev;
 
     oldPrev->m_next = oldNext;
     oldNext->m_prev = oldPrev;
 
-    delete m_node;
-    m_node = oldNext;
+    delete this->m_node;
+    this->m_node = oldNext;
 }
 
 template <typename T>
 void DLinkedList<T>::Iterator::set(const T& value)
 {
-    m_node->m_data = value;
+    this->m_node->m_data = value;
 }
 
 template <typename T>
 void DLinkedList<T>::Iterator::set(T&& value)
 {
-    m_node->m_data = std::forward(value);
+    this->m_node->m_data = std::forward(value);
 }
 
 #endif // DLINKED_LIST_H

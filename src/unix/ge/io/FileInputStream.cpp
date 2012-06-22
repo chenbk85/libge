@@ -9,9 +9,10 @@
 #include "ge/util/Locker.h"
 #include "gepriv/UnixUtil.h"
 
-#include <errno.h> // For errno defines
-#include <fcntl.h> // For create flags
+#include <errno.h>
+#include <fcntl.h>
 //#include <sys/ioctl.h> // For ioctl()
+#include <unistd.h>
 
 // Where FIONREAD is defined varies
 //#ifdef __CYGWIN__

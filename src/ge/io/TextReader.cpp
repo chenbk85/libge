@@ -20,7 +20,7 @@ String TextReader::readLine(bool* success)
     int64 bytesRead = 1;
     String ret;
 
-    success = false;
+    Bool::setBool(success, false);
 
     while (true)
     {
