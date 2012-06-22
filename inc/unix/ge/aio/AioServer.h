@@ -126,15 +126,6 @@ private:
     bool process();
 
 
-    HANDLE _completionPort;      // IO completion port
-    List<AioWorker*> _threads;   // List of threads created
-
-    LONG volatile _state;        // Current server state (1 = started, 2 = shutdown)
-    LONG volatile _pending;      // Number of pending IO requests
-
-    Mutex _lock;                 // Lock for set of files and sockets
-    List<AioFile*> _files;       // Set of files
-    List<AioSocket*> _sockets;   // Set of sockets
 };
 
 #endif // AIO_SERVER_H

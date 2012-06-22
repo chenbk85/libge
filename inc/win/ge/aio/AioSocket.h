@@ -9,6 +9,8 @@
 
 #include <WinSock2.h>
 
+// TODO: Need access to source and dest address
+
 class AioSocket
 {
     friend class AioServer;
@@ -17,10 +19,9 @@ public:
     AioSocket();
     ~AioSocket();
 
-#if defined(HAVE_RVALUE)
+// TODO: This needs to move in owning server
     AioSocket(AioSocket&& other);
     AioSocket& operator=(AioSocket&& other);
-#endif
 
     void init(INetProt_Enum family);
     void hardClose();

@@ -6,6 +6,7 @@
 #include "ge/thread/Mutex.h"
 #include "ge/util/UInt32.h"
 
+#include <cstring>
 
 static const char* badReqMsg =
     "HTTP/1.0 400 Bad Request\r\n"
@@ -384,9 +385,9 @@ StringRef HttpServer::tryReadLine(HttpSession* session,
 void HttpServer::flushLine(HttpSession* session)
 {
     // Move data past end of line to start of buffer
-    memmove(session->lineBuffer,
-            session->lineBuffer + session->lineBufferIndex,
-            session->lineBufferFilled - session->lineBufferIndex);
+    ::memmove(session->lineBuffer,
+              session->lineBuffer + session->lineBufferIndex,
+              session->lineBufferFilled - session->lineBufferIndex);
 
     // Adjust indicies
     session->lineBufferFilled -= session->lineBufferIndex;
@@ -636,7 +637,7 @@ bool HttpServer::readHandler(HttpSession* session,
         if (session->httpProt == HTTP_PROT_11)
         {
             addWriteData(session,
-                         "HTTP/1.1 100 Continue\r\n\r\n",
+                         (char*)"HTTP/1.1 100 Continue\r\n\r\n",
                          25,
                          false,
                          false);
@@ -706,9 +707,9 @@ bool HttpServer::readHandler(HttpSession* session,
                         if (copyable > session->contentLen)
                             copyable = session->contentLen;
 
-                        memcpy(session->content,
-                               session->lineBuffer,
-                               copyable);
+                        ::memcpy(session->content,
+                                 session->lineBuffer,
+                                 copyable);
                         session->contentIndex += copyable;
 
                         // TODO: Adjust line buffer vars here if reusing session

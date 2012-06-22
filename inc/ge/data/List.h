@@ -74,10 +74,8 @@ public:
     List(const List& other);
     List& operator=(const List& other);
 
-#ifdef HAVE_RVALUE
     List(List&& other);
     List& operator=(List&& other);
-#endif
 
     void clear();
 
@@ -210,7 +208,6 @@ List<T>& List<T>::operator=(const List<T>& other)
     return *this;
 }
 
-#ifdef HAVE_RVALUE
 template<typename T>
 List<T>::List(List&& other)
 {
@@ -239,7 +236,6 @@ List<T>& List<T>::operator=(List<T>&& other)
 
     return *this;
 }
-#endif
 
 template<typename T>
 void List<T>::clear()
@@ -319,14 +315,12 @@ void List<T>::insert(size_t index, const T& value)
     std::rotate(_start + index, _iter - 1, _iter);
 }
 
-#ifdef HAVE_RVALUE
 template<typename T>
 void List<T>::insert(size_t index, T&& value)
 {
     addBack(std::forward(value));
     std::rotate(_start + index, _iter - 1, _iter);
 }
-#endif
 
 template<typename T>
 void List<T>::remove(size_t index)
@@ -365,7 +359,6 @@ void List<T>::addBack(const T& value)
     _iter++;
 }
 
-#ifdef HAVE_RVALUE
 template<typename T>
 void List<T>::addBack(T&& value)
 {
@@ -379,7 +372,6 @@ void List<T>::addBack(T&& value)
     CppUtil::moveConstruct(_iter, std::forward<T>(value));
     _iter++;
 }
-#endif
 
 template<typename T>
 void List<T>::addBlockBack(const T* values, size_t count)
@@ -573,7 +565,7 @@ List<T>::ConstIterator::ConstIterator(const ConstIterator& other) :
 
 template<typename T>
 typename List<T>::ConstIterator&
-    List<T>::ConstIterator::operator=(typename const List<T>::ConstIterator& other)
+    List<T>::ConstIterator::operator=(const List<T>::ConstIterator& other)
 {
     _owner = other._owner;
     _ptr = other._ptr;
@@ -636,10 +628,10 @@ List<T>::Iterator::Iterator(const Iterator& other) :
 
 template<typename T>
 typename List<T>::Iterator&
-    List<T>::Iterator::operator=(typename const List<T>::Iterator& other)
+    List<T>::Iterator::operator=(const List<T>::Iterator& other)
 {
-    _owner = other._owner;
-    _ptr = other._ptr;
+    this->_owner = other._owner;
+    this->_ptr = other._ptr;
     return *this;
 }
 
@@ -658,31 +650,31 @@ T& List<T>::Iterator::next()
 template<typename T>
 void List<T>::Iterator::insert(const T& value)
 {
-    _owner->insert(_ptr - _owner->_start, value);
+    this->_owner->insert(this->_ptr - this->_owner->_start, value);
 }
 
 template<typename T>
 void List<T>::Iterator::insert(T&& value)
 {
-    _owner->insert(_ptr - _owner->_start, std::forward(value));
+    this->_owner->insert(this->_ptr - this->_owner->_start, std::forward(value));
 }
 
 template<typename T>
 void List<T>::Iterator::remove()
 {
-    _owner->remove(_ptr - _owner->_start);
+    this->_owner->remove(this->_ptr - this->_owner->_start);
 }
 
 template<typename T>
 void List<T>::Iterator::set(const T& value)
 {
-    _owner->set(_ptr - _owner->_start, value);
+    this->_owner->set(this->_ptr - this->_owner->_start, value);
 }
 
 template<typename T>
 void List<T>::Iterator::set(T&& value)
 {
-    _owner->set(_ptr - _owner->_start, std::forward(value));
+    this->_owner->set(this->_ptr - this->_owner->_start, std::forward(value));
 }
 
 template<typename T>

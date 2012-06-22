@@ -48,14 +48,14 @@ char hexValue[256] =
 
 // RFC822 day of week strings
 static
-char* shortDayOfWeek[] = {"Mon", "Tue", "Wed", "Thu",
-                          "Fri", "Sat", "Sun"};
+const char* shortDayOfWeek[] = {"Mon", "Tue", "Wed", "Thu",
+                                "Fri", "Sat", "Sun"};
 
 // RFC822 month strings
 static
-char* shortMonth[] = {"Jan", "Feb", "Mar", "Apr",
-                      "May", "Jun", "Jul", "Aug",
-                      "Sep", "Oct", "Nov", "Dec"};
+const char* shortMonth[] = {"Jan", "Feb", "Mar", "Apr",
+                            "May", "Jun", "Jul", "Aug",
+                            "Sep", "Oct", "Nov", "Dec"};
 
 namespace HttpUtil
 {

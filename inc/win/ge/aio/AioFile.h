@@ -22,7 +22,7 @@ public:
     AioFile();
     ~AioFile();
 
-    Error open(StringRef fileName, OpenMode_Enum mode, int permissions);
+    void open(const StringRef fileName, OpenMode_Enum mode, int permissions);
     void close();
 
 private:

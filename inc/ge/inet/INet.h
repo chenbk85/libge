@@ -4,7 +4,6 @@
 #define INET_H
 
 #include <ge/text/String.h>
-#include <ge/text/StringRef.h>
 
 // Generic enum for "IPv4 or IPv6" distinctions
 enum INetProt_Enum

@@ -2,6 +2,8 @@
 
 #include "ge/http/HttpSession.h"
 
+#include <cstring>
+
 HttpSession::HttpSession()
 {
     reset();
@@ -67,15 +69,15 @@ void HttpSession::respond(const StringRef& header,
                           bool             freeData)
 {
     char* headerCopy = new char[header.length()];
-    memcpy(headerCopy, header.data(), header.length());
+    ::memcpy(headerCopy, header.data(), header.length());
 
     if (httpProt == HTTP_PROT_10)
     {
-        _httpServer->addWriteData(this, "HTTP/1.0 ", 8, false, false);
+        _httpServer->addWriteData(this, (char*)"HTTP/1.0 ", 8, false, false);
     }
     else
     {
-        _httpServer->addWriteData(this, "HTTP/1.1 ", 8, false, false);
+        _httpServer->addWriteData(this, (char*)"HTTP/1.1 ", 8, false, false);
     }
 
     _httpServer->addWriteData(this, headerCopy, header.length(), true, false);
