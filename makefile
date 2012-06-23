@@ -57,7 +57,11 @@ SRCS = \
     src/unix/ge/thread/Thread.cpp \
     src/unix/ge/util/Double.cpp \
     src/unix/ge/util/Float.cpp \
-    src/unix/gepriv/UnixUtil.cpp
+    src/unix/gepriv/UnixUtil.cpp \
+    src/unix/gepriv/aio/FileServiceBlocking.cpp \
+    src/unix/gepriv/aio/FileServiceLinuxAio.cpp \
+    src/unix/gepriv/aio/SocketServicePoll.cpp \
+    src/unix/gepriv/aio/SocketServiceEpoll.cpp
 
 DEPS = $(SRCS:.cpp=.d)
 

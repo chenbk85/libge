@@ -10,7 +10,7 @@
  *
  * Derived class not required to be thread safe.
  */
-class EXPORT InputStream
+class InputStream
 {
 public:
     /*

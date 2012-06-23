@@ -6,8 +6,8 @@
 #include <ge/inet/INetUtil.h>
 #include <ge/util/Bool.h>
 
-#include <cstdio>
-#include <cstring>
+#include <stdio.h>
+#include <string.h>
 #include <arpa/inet.h>
 
 INetAddress::INetAddress() :
@@ -37,21 +37,6 @@ INetAddress& INetAddress::operator=(const INetAddress& other)
 
     return *this;
 }
-
-#if defined(HAVE_RVALUE)
-INetAddress::INetAddress(INetAddress&& other)
-{
-    m_family = other.m_family;
-    ::memcpy(m_addr, other.m_addr, sizeof(m_addr));
-}
-
-INetAddress& INetAddress::operator=(INetAddress&& other)
-{
-    m_family = other.m_family;
-    ::memcpy(m_addr, other.m_addr, sizeof(m_addr));
-    return *this;
-}
-#endif
 
 INetProt_Enum INetAddress::getFamily() const
 {
@@ -84,6 +69,39 @@ String INetAddress::toString() const
 }
 
 // Static member functions --------------------------------------------------
+
+INetAddress INetAddress::getAddrAny(INetProt_Enum family)
+{
+    INetAddress ret;
+
+    // The bind any address is 0s for both protocols so just fill with
+    // zeros regardless
+    ret.m_family = family;
+    ::memset(ret.m_addr, 0, 16);
+
+    return ret;
+}
+
+INetAddress INetAddress::getLoopback(INetProt_Enum family)
+{
+    static const char rawIpv4[4] = {127,0,0,1};
+    static const char rawIpv6[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+
+    INetAddress ret;
+    ret.m_family = family;
+
+    if (family == INET_PROT_IPV4)
+    {
+        ::memcpy(ret.m_addr, rawIpv4, 4);
+        ::memset(ret.m_addr+4, 0, 12);
+    }
+    else if (family == INET_PROT_IPV6)
+    {
+        ::memcpy(ret.m_addr, rawIpv6, 16);
+    }
+
+    return ret;
+}
 
 INetAddress INetAddress::fromString(StringRef strRef, bool* valid)
 {

@@ -138,42 +138,6 @@ INetAddress INetAddress::fromString(StringRef strRef, bool* valid)
     }
 
     return ret;
-/*
-    ShortList<char, 256> buffer;
-    buffer.addBlockBack(strRef.data(), strRef.length());
-    buffer.addBack('\0');
-
-    INetAddress ret;
-
-    unsigned long ipv4Addr = ::inet_addr(buffer.data());
-
-    if (ipv4Addr != INADDR_NONE)
-    {
-        ret.m_family = INET_PROT_IPV4;
-        ::memcpy(ret.m_addr, &ipv4Addr, 4);
-        ::memset(ret.m_addr+4, 0, 12);
-        Bool::setBool(valid, true);
-        return ret;
-    }
-
-#if (NTDDI_VERSION < NTDDI_VISTA)
-
-#else
-    in6_addr ipv6Address;
-    int ipv6ConvRet = ::inet_pton(AF_INET6, buffer.data(), &ipv6Address);
-
-    if (ipv6ConvRet != -1)
-    {
-        ret.m_family = INET_PROT_IPV6;
-        ::memcpy(ret.m_addr, &ipv6Address, 16);
-        Bool::setBool(valid, true);
-        return ret;
-    }
-#endif
-
-    Bool::setBool(valid, false);
-    return ret;
-*/
 }
 
 INetAddress INetAddress::fromBytes(INetProt_Enum family, unsigned char* rawBytes)

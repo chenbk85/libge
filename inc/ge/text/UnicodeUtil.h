@@ -4,7 +4,7 @@
 #include <ge/common.h>
 #include <ge/text/String.h>
 
-#include <cassert>
+#include <assert.h>
 
 template <class T>
 class List;

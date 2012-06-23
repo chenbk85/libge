@@ -22,7 +22,7 @@ public:
 	FileInputStream();
 	~FileInputStream();
 
-	void open(const String fileName);
+	void open(const String fileName); // TODO: Stringref
 
 	uint32 available() OVERRIDE;
 	void close() OVERRIDE;
@@ -30,11 +30,11 @@ public:
 	int64 read(void* buffer, uint32 len) OVERRIDE;
 
 private:
-	explicit FileInputStream(int32 fileDescriptor) DELETED;
-	int64 internalRead(void* buffer, uint32 len) DELETED;
+	explicit FileInputStream(int32 fileDescriptor);
+	int64 internalRead(void* buffer, uint32 len);
 
-	FileInputStream(const FileInputStream& other);
-	FileInputStream& operator=(const FileInputStream &other);
+	FileInputStream(const FileInputStream& other) DELETED;
+	FileInputStream& operator=(const FileInputStream &other)  DELETED;
 
 	int32 m_fileDescriptor;
 };

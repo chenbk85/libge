@@ -6,7 +6,7 @@ int main()
 {
     System::initLibrary();
 
-    Console::outln("Hello World\n");
+    Console::outln("Hello World");
 
     System::cleanupLibrary();
 

@@ -17,34 +17,24 @@
 
 namespace UInt32
 {
-    EXPORT
     String uint32ToString(uint32 value, uint32 radix=10);
 
-    EXPORT
     uint32 uint32ToBuffer(char* buffer, uint32 bufferLen, uint32 value, uint32 radix=10);
 
-    EXPORT
     uint32 parseUInt32(StringRef strRef, bool* ok=NULL, uint32 radix=10);
 
-    EXPORT
     uint32 uint32CountOnes(uint32 value);
 
-    EXPORT
     uint32 uint32CountZeros(uint32 value);
 
-    EXPORT
     bool uint32Parity(uint32 value);
 
-    EXPORT
     bool uint32IsPow2(uint32 value);
 
-    EXPORT
     uint32 uint32NextPow2(uint32 value);
 
-    EXPORT
     uint32 uint32RotateLeft(uint32 value, uint32 amount);
 
-    EXPORT
     uint32 uint32RotateRight(uint32 value, uint32 amount);
 }
 

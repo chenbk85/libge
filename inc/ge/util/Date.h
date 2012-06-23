@@ -24,7 +24,7 @@
  *
  * TODO: Drop native type and just do the math locally
  */
-class EXPORT Date
+class Date
 {
 public:
 	enum dateMonth

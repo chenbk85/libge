@@ -12,35 +12,29 @@
  */
 namespace Float
 {
-    EXPORT
     String floatToString(float value,
                          char format='f',
                          int32 precision=-1);
 
-    EXPORT
     uint32 floatToBuffer(char* buffer,
                          uint32 bufferLen,
                          float value,
                          char format='f',
                          int32 precision=-1);
 
-    EXPORT
     float parseFloat(StringRef strRef,
                      bool* ok=NULL);
 
-    EXPORT
     String localeFloatToString(float value,
                                char format='f',
                                int32 precision=-1);
 
-    EXPORT
     uint32 localeFloatToBuffer(char* buffer,
                                uint32 bufferLen,
                                float value,
                                char format='f',
                                int32 precision=-1);
 
-    EXPORT
     float parseLocaleFloat(StringRef strRef,
                            bool* ok=NULL);
 }

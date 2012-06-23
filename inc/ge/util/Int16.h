@@ -20,13 +20,10 @@
 
 namespace Int16
 {
-    EXPORT
     String int16ToString(int16 value, uint32 radix=10);
 
-    EXPORT
     uint32 int16ToBuffer(char* buffer, uint32 bufferLen, int16 value, uint32 radix=10);
 
-    EXPORT
     int16 parseInt16(StringRef strRef, bool* ok=NULL, uint32 radix=10);
 }
 

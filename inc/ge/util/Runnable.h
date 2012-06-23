@@ -11,7 +11,7 @@
  * another thread has some local data and a function that needs to be
  * run. When you have data and a method, you have a class.
  */
-class EXPORT Runnable
+class Runnable
 {
 public:
         virtual void run() = 0;

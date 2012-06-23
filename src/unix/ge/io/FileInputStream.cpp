@@ -11,8 +11,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
-//#include <sys/ioctl.h> // For ioctl()
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 // Where FIONREAD is defined varies
 //#ifdef __CYGWIN__
@@ -37,6 +37,23 @@ FileInputStream::~FileInputStream()
     close();
 }
 
+uint32 FileInputStream::available()
+{
+    int ret = -1;
+
+    int res = ::ioctl(m_fileDescriptor, FIONREAD, &ret);
+
+    if (res == -1)
+    {
+        // TODO: Throw
+    }
+
+    if (ret < 0)
+        return 0;
+
+    return ret;
+}
+
 void FileInputStream::open(const String fileName)
 {
     if (m_fileDescriptor != -1)
@@ -53,8 +70,10 @@ void FileInputStream::open(const String fileName)
 
     if (m_fileDescriptor == -1)
     {
-        throw IOException(String("open() call failed with: ") +
-            UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "open",
+                                         "FileInputStream::open");
+        throw IOException(error);
     }
 }
 
@@ -86,7 +105,7 @@ int64 FileInputStream::internalRead(void* buffer, uint32 len)
 {
     if (m_fileDescriptor == -1)
     {
-        throw IOException("Failed to read from stream: Stream is closed");
+        throw IOException("Stream is closed");
     }
 
     //size_t bytesAvail = 0;
@@ -121,12 +140,14 @@ int64 FileInputStream::internalRead(void* buffer, uint32 len)
         }
         else
         {
-            throw IOException(String("read() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+            Error error = UnixUtil::getError(errno,
+                                             "read",
+                                             "FileOutputStream::read");
+            throw IOException(error);
         }
     }
 
-    // Some unix varients just keep returning 0 at end of pipe
+    // Some unix variants just keep returning 0 at end of pipe
     if (bytesRead == 0)
         return -1;
 

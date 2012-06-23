@@ -20,13 +20,10 @@
 
 namespace Int8
 {
-    EXPORT
     String int8ToString(int8 value, uint32 radix=10);
 
-    EXPORT
     uint32 int8ToBuffer(char* buffer, uint32 bufferLen, int8 value, uint32 radix=10);
 
-    EXPORT
     int8 parseInt8(StringRef strRef, bool* ok=NULL, uint32 radix=10);
 }
 

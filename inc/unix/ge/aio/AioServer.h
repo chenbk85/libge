@@ -55,7 +55,7 @@ public:
     AioServer();
     ~AioServer();
 
-    Error startServing(uint32 desiredThreads);
+    void startServing(uint32 desiredThreads);
 
     void shutdown();
 

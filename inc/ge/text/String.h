@@ -11,20 +11,14 @@ class String
 public:
     String();
     String(const String& str);
-#if defined(HAVE_RVALUE)
     String(String&& str);
-#endif
     String(const StringRef strRef);
-#if defined(HAVE_RVALUE)
     String(const StringRef&& strRef);
-#endif
     String(const char* cstr);
     String(const char* data, size_t dataLen);
 
     String& operator=(const String& str);
-#if defined(HAVE_RVALUE)
     String& operator=(String&& str);
-#endif
     String& operator=(const StringRef& strRef);
     String& operator=(const char* cstr);
 

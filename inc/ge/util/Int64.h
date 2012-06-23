@@ -20,13 +20,10 @@
 
 namespace Int64
 {
-    EXPORT
     String int64ToString(int64 value, uint32 radix=10);
 
-    EXPORT
     uint32 int64ToBuffer(char* buffer, uint32 bufferLen, int64 value, uint32 radix=10);
 
-    EXPORT
     int64 parseInt64(StringRef strRef, bool* ok, uint32 radix);
 }
 

@@ -38,7 +38,7 @@ void FileOutputStream::open(const String fileName, bool append)
 {
     if (m_fileDescriptor != -1)
     {
-        throw IOException("File alread open");
+        throw IOException("File already open");
     }
 
     // Write access, create if needed, don't inherit
@@ -61,8 +61,10 @@ void FileOutputStream::open(const String fileName, bool append)
 
     if (m_fileDescriptor == -1)
     {
-        throw IOException(String("open() call failed with: ") +
-            UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "open",
+                                         "FileOutputStream::open");
+        throw IOException(error);
     }
 }
 
@@ -92,7 +94,7 @@ int64 FileOutputStream::internalWrite(const void* buffer, uint32 maxlen)
 {
     if (m_fileDescriptor == -1)
     {
-        throw IOException("Failed to write to stream: Stream is closed");
+        throw IOException("Stream is closed");
     }
 
     errno = 0;
@@ -109,8 +111,10 @@ int64 FileOutputStream::internalWrite(const void* buffer, uint32 maxlen)
         }
         else
         {
-            throw IOException(String("write() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+            Error error = UnixUtil::getError(errno,
+                                             "write",
+                                             "FileOutputStream::write");
+                    throw IOException(error);
         }
     }
     return bytesWritten;

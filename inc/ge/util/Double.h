@@ -9,35 +9,29 @@
 
 namespace Double
 {
-    EXPORT
     String doubleToString(double value,
                           char format='f',
                           int32 precision=-1);
 
-    EXPORT
     uint32 doubleToBuffer(char* buffer,
                           uint32 bufferLen,
                           double value,
                           char format='f',
                           int32 precision=-1);
 
-    EXPORT
     double parseDouble(StringRef strRef,
                        bool* ok=NULL);
 
-    EXPORT
     String localeDoubleToString(double value,
                                 char format='f',
                                 int32 precision=-1);
 
-    EXPORT
     uint32 localeDoubleToBuffer(char* buffer,
                                 uint32 bufferLen,
                                 double value,
                                 char format='f',
                                 int32 precision=-1);
 
-    EXPORT
     double parseLocaleDouble(StringRef strRef,
                              bool* ok=NULL);
 }

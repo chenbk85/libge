@@ -44,7 +44,6 @@ String::String(const String& str)
     }
 }
 
-#if defined(HAVE_RVALUE)
 String::String(String&& str)
 {
     len = str.len;
@@ -62,7 +61,6 @@ String::String(String&& str)
         str.len = 0;
     }
 }
-#endif
 
 String::String(const StringRef strRef)
 {
@@ -86,7 +84,6 @@ String::String(const StringRef strRef)
     }
 }
 
-#if defined(HAVE_RVALUE)
 String::String(const StringRef&& strRef)
 {
     len = strRef.length();
@@ -108,7 +105,6 @@ String::String(const StringRef&& strRef)
         strData[refLen] = '\0';
     }
 }
-#endif
 
 String::String(const char* cstr)
 {
@@ -179,7 +175,6 @@ String& String::operator=(const String& str)
     return *this;
 }
 
-#if defined(HAVE_RVALUE)
 String& String::operator=(String&& str)
 {
     if (this != &str)
@@ -207,8 +202,6 @@ String& String::operator=(String&& str)
 
     return *this;
 }
-
-#endif
 
 String& String::operator=(const StringRef& strRef)
 {
