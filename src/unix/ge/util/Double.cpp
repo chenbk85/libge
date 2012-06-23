@@ -6,16 +6,10 @@
 #include "ge/util/Int32.h"
 
 #include <cassert>
-#include <cerrno>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <sstream>
-#include <vector>
 
-static void makeFormatStr(char* buffer,
-                          char format,
-                          int32 precision);
+// TODO: Need to apply format flags
 
 String Double::doubleToString(double value,
                               char format,
@@ -27,9 +21,9 @@ String Double::doubleToString(double value,
            format == 'g' ||
            format == 'G');
 
-    // This default implementation works, but suffers a bit in performance
     std::stringstream ss;
     ss.imbue(std::locale("C"));
+    ss.precision(precision);
     ss << value;
     std::string str = ss.str();
     return String(str.c_str(), str.length());
@@ -47,9 +41,9 @@ uint32 Double::doubleToBuffer(char* buffer,
            format == 'g' ||
            format == 'G');
 
-    // This default implementation works, but suffers a bit in performance
     std::stringstream ss;
     ss.imbue(std::locale("C"));
+    ss.precision(precision);
     ss << value;
     std::string str = ss.str();
     uint32 strLen = str.length();
@@ -88,24 +82,11 @@ String Double::localeDoubleToString(double value,
                                     char format,
                                     int32 precision)
 {
-    char buf[512];
-    char formatStr[14];
-
-    // Generate a format string
-    makeFormatStr(formatStr, format, precision);
-
-    uint32 printLen = (uint32)::snprintf(buf, sizeof(buf), formatStr, value);
-
-    if (printLen < sizeof(buf))
-    {
-        return String(buf);
-    }
-    else
-    {
-        std::vector<char> tempBuf(printLen+1);
-        ::snprintf(&tempBuf[0], printLen+1, formatStr, value);
-        return String(&tempBuf[0], printLen);
-    }
+    std::stringstream ss;
+    ss.precision(precision);
+    ss << value;
+    std::string str = ss.str();
+    return String(str.c_str(), str.length());
 }
 
 uint32 Double::localeDoubleToBuffer(char* buffer,
@@ -120,24 +101,18 @@ uint32 Double::localeDoubleToBuffer(char* buffer,
            format == 'g' ||
            format == 'G');
 
-    char tempBuffer[512];
-    char formatStr[14];
+    std::stringstream ss;
+    ss.precision(precision);
+    ss << value;
+    std::string str = ss.str();
+    uint32 strLen = str.length();
 
-    // Generate a format string
-    makeFormatStr(formatStr, format, precision);
-
-    uint32 printLen = (uint32)::snprintf(tempBuffer, sizeof(tempBuffer), formatStr, value);
-
-    if (printLen < sizeof(tempBuffer))
+    if (strLen < bufferLen)
     {
-        ::memcpy(buffer, tempBuffer, printLen);
-    }
-    else if (printLen < bufferLen)
-    {
-        ::snprintf(buffer, printLen, formatStr, value);
+        ::memcpy(buffer, str.c_str(), strLen);
     }
 
-    return printLen;
+    return strLen;
 }
 
 double Double::parseLocaleDouble(StringRef strRef, bool* ok)
@@ -157,28 +132,6 @@ double Double::parseLocaleDouble(StringRef strRef, bool* ok)
 	else
 	{
 		Bool::setBool(ok, false);
-		return 0.0;
+		return 0.0d;
 	}
-}
-
-// Local Functions ----------------------------------------------------------
-
-static void makeFormatStr(char buffer[14],
-                          char format,
-                          int32 precision)
-{
-    buffer[0] = '%';
-
-    if (precision < 0)
-    {
-        buffer[1] = format;
-        buffer[2] = '\0';
-    }
-    else
-    {
-        buffer[1] = '.';
-        uint32 precLen = Int32::int32ToBuffer(buffer+2, precision, 10);
-        buffer[2+precLen] = format;
-        buffer[3+precLen] = '\0';
-    }
 }

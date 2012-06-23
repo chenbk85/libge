@@ -16,6 +16,41 @@
 // Defines the size of buffer used when reading an entire stream
 #define READ_BUFFER_SIZE 1024
 
+static
+ssize_t readFully(int fd, void* buffer, size_t count)
+{
+    ssize_t ret = 0;
+
+    while (count > 0)
+    {
+        count -= ret;
+        ret = UnixUtil::sys_read(fd, buffer, count);
+
+        if (ret == -1)
+            return -1;
+    }
+
+    return count;
+}
+
+static
+ssize_t writeFully(int fd, const void* buffer, size_t count)
+{
+    ssize_t ret = 0;
+
+    while (count > 0)
+    {
+        count -= ret;
+        ret = UnixUtil::sys_write(fd, buffer, count);
+
+        if (ret == -1)
+            return -1;
+    }
+
+    return count;
+}
+
+
 Process::Process()
 {
     m_hasStarted = false;
@@ -303,7 +338,7 @@ void Process::internalExec(const String& programName,
 
         // An error occured if execvp returned.
         error = errno;
-        UnixUtil::sys_write_fully(childErrorPipe[1], &error, sizeof(int32));
+        writeFully(childErrorPipe[1], &error, sizeof(int32));
         ::close(childErrorPipe[1]);
         ::_exit(error);
     }
@@ -316,7 +351,7 @@ void Process::internalExec(const String& programName,
         ::close(childErrorPipe[1]);
 
         // Try to read error from child
-        ssize_t bytesRead = UnixUtil::sys_read_fully(childErrorPipe[0], &error, sizeof(int32));
+        ssize_t bytesRead = readFully(childErrorPipe[0], &error, sizeof(int32));
 
         // Close the read end of the pipe now that we don't need it either
         ::close(childErrorPipe[0]);

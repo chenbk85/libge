@@ -83,8 +83,6 @@ void Condition::lock()
                 "Aborting.\n", ::strerror(errno), errno);
         ::abort();
     }
-
-    m_lockCount++;
 }
 
 void Condition::unlock()

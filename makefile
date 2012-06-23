@@ -1,12 +1,15 @@
 # libge makefile
 
 
-CC := g++
-CCFLAGS := -std=c++11 -O2 -Iinc -Iinc/unix
-LDFLAGS := -lpthread
+CC = g++
+CCFLAGS = -std=c++11 -O2 -Iinc -Iinc/unix
+LD = g++
+LDFLAGS = -lpthread
 
-RM := rm -f
+RM = rm -f
 
+#OBJDIR = objects
+#DEPDIR = deps
 
 SRCS = \
     testmain.cpp \
@@ -59,10 +62,12 @@ OBJS = $(SRCS:.cpp=.o)
 
 # Main rule to build application
 libgetest: $(DEPS) $(OBJS)
-	$(CC) $(LDFLAGS) $(OBJS) -o libgetest
+	$(LD) $(LDFLAGS) $(OBJS) -o libgetest
 
 # Include rules from generated dependency files
--include $(DEPS)
+ifneq ($(MAKECMDGOALS),clean)
+	-include $(DEPS)
+endif
 
 # Rule if you need to make a .d file from a .cpp file
 %.d : %.cpp
@@ -74,15 +79,18 @@ libgetest: $(DEPS) $(OBJS)
 
 # "$@" is the target (whatever.d)
 # "$<" is the prerequisite (whatever.cpp)
-# "$(<:.cpp=.o)" replaces the .cpp extension with .o
+# "$(<:.cpp=.o)" replaces the prerequisite's .cpp extension with .o
 
 # Rule to build .o files from .cpp files
 %.o : %.cpp
-	$(CC) $(CCFLAGS) -c "$<"
+	$(CC) $(CCFLAGS) -c "$<" -o "$(<:.cpp=.o)"
 
+# -c indicates that you should compile without linking
 # "$<" is the prerequisite (whatever.cpp)
+# -o sets the output file
+# $(<:.cpp=.o) replaces the prerequisite's .cpp extension with .o
 
 # Clean rule
 .PHONY : clean
 clean:
-	$(RM) $(DEPS) $(OBJS) libgetest
+	-$(RM) $(DEPS) $(OBJS) libgetest
