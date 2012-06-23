@@ -9,20 +9,20 @@
 
 namespace X86Info
 {
-EXPORT bool x86info_hasCMPXCHG16B;
-EXPORT bool x86info_hasLZCNT;
-EXPORT bool x86info_hasMOVBE;
-EXPORT bool x86info_hasPOPCNT;
-EXPORT bool x86info_hasPCLMULQDQ;
-EXPORT bool x86info_hasSSE;
-EXPORT bool x86info_hasSSE2;
-EXPORT bool x86info_hasSSE3;
-EXPORT bool x86info_hasSupplementalSSE3;
-EXPORT bool x86info_hasSSE4_1;
-EXPORT bool x86info_hasSSE4_2;
-EXPORT bool x86info_hasSSE4a;
-EXPORT bool x86info_hasAVX;
-EXPORT bool x86info_hasAES;
+bool x86info_hasCMPXCHG16B;
+bool x86info_hasLZCNT;
+bool x86info_hasMOVBE;
+bool x86info_hasPOPCNT;
+bool x86info_hasPCLMULQDQ;
+bool x86info_hasSSE;
+bool x86info_hasSSE2;
+bool x86info_hasSSE3;
+bool x86info_hasSupplementalSSE3;
+bool x86info_hasSSE4_1;
+bool x86info_hasSSE4_2;
+bool x86info_hasSSE4a;
+bool x86info_hasAVX;
+bool x86info_hasAES;
 
 
 void initializeX86Info()

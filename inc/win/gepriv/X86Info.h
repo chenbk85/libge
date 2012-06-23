@@ -32,19 +32,19 @@ namespace X86Info
 {
     // Globals pulled in from X86Info.cpp
     // Should be accessed through accessor functions.
-    EXPORT extern bool x86info_hasCMPXCHG16B;
-    EXPORT extern bool x86info_hasLZCNT;
-    EXPORT extern bool x86info_hasPOPCNT;
-    EXPORT extern bool x86info_hasPCLMULQDQ;
-    EXPORT extern bool x86info_hasSSE;
-    EXPORT extern bool x86info_hasSSE2;
-    EXPORT extern bool x86info_hasSSE3;
-    EXPORT extern bool x86info_hasSupplementalSSE3;
-    EXPORT extern bool x86info_hasSSE4_1;
-    EXPORT extern bool x86info_hasSSE4_2;
-    EXPORT extern bool x86info_hasSSE4a;
-    EXPORT extern bool x86info_hasAVX;
-    EXPORT extern bool x86info_hasAES;
+    extern bool x86info_hasCMPXCHG16B;
+    extern bool x86info_hasLZCNT;
+    extern bool x86info_hasPOPCNT;
+    extern bool x86info_hasPCLMULQDQ;
+    extern bool x86info_hasSSE;
+    extern bool x86info_hasSSE2;
+    extern bool x86info_hasSSE3;
+    extern bool x86info_hasSupplementalSSE3;
+    extern bool x86info_hasSSE4_1;
+    extern bool x86info_hasSSE4_2;
+    extern bool x86info_hasSSE4a;
+    extern bool x86info_hasAVX;
+    extern bool x86info_hasAES;
 
     /*
      * Initializes the X86Info namespace globals

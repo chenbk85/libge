@@ -7,7 +7,7 @@
 
 class String;
 
-class EXPORT StringRef
+class StringRef
 {
 public:
     StringRef();

@@ -16,7 +16,7 @@
  * Windows process implementation. Used to create child processes with
  * redirected IO.
  */
-class EXPORT Process
+class Process
 {
 public:
 	Process();

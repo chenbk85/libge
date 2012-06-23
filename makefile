@@ -70,10 +70,10 @@ OBJS = $(SRCS:.cpp=.o)
 # Main rule to build application
 libgetest: $(DEPS) $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o libgetest
-
+	
 # Include rules from generated dependency files
 ifneq ($(MAKECMDGOALS),clean)
-	-include $(DEPS)
+-include $(DEPS)
 endif
 
 # Rule if you need to make a .d file from a .cpp file

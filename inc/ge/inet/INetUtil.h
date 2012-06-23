@@ -13,7 +13,6 @@ namespace INetUtil
      *
      * Returns true on successful parse, false on failure.
      */
-    EXPORT
     bool ipv4AddrStringToBinary(StringRef src, uint8* dest);
 
     /*
@@ -22,7 +21,6 @@ namespace INetUtil
      *
      * Returns true on successful parse, false on failure.
      */
-    EXPORT
     bool ipv6AddrStringToBinary(StringRef src, uint8* dest);
 };
 

@@ -14,7 +14,7 @@
  *
  * Not thread safe.
  */
-class EXPORT FileInputStream : public InputStream
+class FileInputStream : public InputStream
 {
 friend class Process;
 

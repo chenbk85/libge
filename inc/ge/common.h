@@ -40,8 +40,6 @@
 
 // Note C++11 support
 #if (_MSC_VER >= 1600)
-#define HAVE_RVALUE
-#define HAVE_UNICODE_LIT
 #define HAVE_NULLPTR
 #define HAVE_OVERRIDE
 #endif
@@ -66,15 +64,6 @@ typedef __int32 ssize_t;
 typedef wchar_t utf16;
 typedef unsigned __int32 utf32; // wchar32_t just an alias for now
 
-// Define NULL
-#if !defined(NULL)
-#if (_MSC_VER >= 1600)
-#define NULL nullptr
-#else
-#define NULL 0L
-#endif
-#endif
-
 // Define alignment macros
 #define ALIGN(X, Y) __declspec(align(Y)) X
 
@@ -92,16 +81,6 @@ typedef unsigned __int32 utf32; // wchar32_t just an alias for now
 #define CHIPSET_X86 1
 #endif
 
-// Export define
-/*
-#if defined(BUILD_LIBGE_DLL)
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT __declspec(dllimport)
-#endif
-*/
-#define EXPORT
-
 #else // Not Visual Studio
 
 // Clang compatibility
@@ -114,17 +93,6 @@ typedef unsigned __int32 utf32; // wchar32_t just an alias for now
 #endif
 
 // Note C++11 support
-#if (GCC_VERSION_AT_LEAST(4, 6, 0) && defined(_GXX_EXPERIMENTAL_CXX0X__)) || \
-    __has_feature(cxx_rvalue_references) || \
-    __has_extension(cxx_rvalue_references)
-#define HAVE_RVALUE
-#endif
-
-#if (GCC_VERSION_AT_LEAST(4, 5, 0) && defined(_GXX_EXPERIMENTAL_CXX0X__)) || \
-    __has_feature(cxx_unicode_literals)
-#define HAVE_UNICODE_LIT
-#endif
-
 #if (GCC_VERSION_AT_LEAST(4, 6, 0) && defined(_GXX_EXPERIMENTAL_CXX0X__)) || \
     __has_feature(cxx_nullptr) || \
     __has_extension(cxx_nullptr)
@@ -213,7 +181,5 @@ typedef wchar_t utf32;
 #else
 #define DELETED
 #endif
-
-#define EXPORT
 
 #endif // COMMON_H
