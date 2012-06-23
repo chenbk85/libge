@@ -20,7 +20,7 @@ namespace Console
 
     void errln(const StringRef& str);
 
-    size_t read(char buffer, size_t bufLen);
+    size_t read(char* buffer, size_t bufLen);
 
     void setLineBuffering(bool lineBuffering);
 };

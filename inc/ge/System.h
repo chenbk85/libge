@@ -6,6 +6,7 @@
 #include <ge/common.h>
 #include <ge/data/List.h>
 #include <ge/text/String.h>
+#include <ge/text/StringRef.h>
 
 namespace System
 {
@@ -33,12 +34,13 @@ namespace System
     /*
      * Returns the value of the passed environment variable.
      */
-    String getEnv(String envName);
+    String getEnv(const StringRef envName);
 
     /*
      * Sets the value of the passed environment variable.
      */
-    void setEnv(String envName, String value);
+    void setEnv(const StringRef envName,
+                const StringRef value);
 
     /*
      * Returns the current process's underlying 8-bit encoding

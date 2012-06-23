@@ -57,10 +57,8 @@ static void writeHandle(HANDLE handle,
     }
 }
 
-namespace Console
-{
 
-void out(const StringRef& str)
+void Console::out(const StringRef& str)
 {
     if (!g_consoleInit)
         initConsole();
@@ -68,7 +66,7 @@ void out(const StringRef& str)
     writeHandle(g_stdOut, str.data(), str.length(), g_stdOutIsConsole);
 }
 
-void outln(const StringRef& str)
+void Console::outln(const StringRef& str)
 {
     static const char newline[1] = {'\n'};
 
@@ -79,7 +77,7 @@ void outln(const StringRef& str)
     writeHandle(g_stdOut, newline, 1, g_stdOutIsConsole);
 }
 
-void err(const StringRef& str)
+void Console::err(const StringRef& str)
 {
     if (!g_consoleInit)
         initConsole();
@@ -87,7 +85,7 @@ void err(const StringRef& str)
     writeHandle(g_stdErr, str.data(), str.length(), g_stdErrIsConsole);
 }
 
-void errln(const StringRef& str)
+void Console::errln(const StringRef& str)
 {
     static const char newline[1] = {'\n'};
 
@@ -98,7 +96,7 @@ void errln(const StringRef& str)
     writeHandle(g_stdErr, newline, 1, g_stdErrIsConsole);
 }
 
-size_t read(char buffer, size_t bufLen)
+size_t Console::read(char* buffer, size_t bufLen)
 {
     if (!g_consoleInit)
         initConsole();
@@ -128,7 +126,7 @@ size_t read(char buffer, size_t bufLen)
     return 0;
 }
 
-void setLineBuffering(bool lineBuffering)
+void Console::setLineBuffering(bool lineBuffering)
 {
     if (!g_consoleInit)
         initConsole();
@@ -176,5 +174,3 @@ void setLineBuffering(bool lineBuffering)
         // TODO: Handle
     }
 }
-
-}; // End namespace Console

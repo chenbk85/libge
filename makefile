@@ -2,7 +2,7 @@
 
 
 CC = g++
-CCFLAGS = -std=c++11 -O2 -Iinc -Iinc/unix
+CCFLAGS = -std=gnu++11 -O2 -Iinc -Iinc/unix
 LD = g++
 LDFLAGS = -lpthread
 
@@ -13,6 +13,7 @@ RM = rm -f
 
 SRCS = \
     testmain.cpp \
+    src/ge/ErrorData.cpp \
     src/ge/http/HttpServer.cpp \
     src/ge/http/HttpSession.cpp \
     src/ge/http/HttpUtil.cpp \
@@ -37,7 +38,6 @@ SRCS = \
     src/ge/util/UInt64.cpp \
     src/ge/util/UtilData.cpp \
     src/unix/ge/Error.cpp \
-    src/unix/ge/ErrorData.cpp \
     src/unix/ge/System.cpp \
     src/unix/ge/inet/INet.cpp \
     src/unix/ge/inet/INetAddress.cpp \
