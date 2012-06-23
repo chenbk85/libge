@@ -9,8 +9,8 @@
 #include "ge/io/IOException.h"
 #include "gepriv/UnixUtil.h"
 
-#include <cassert>
-#include <cstring>
+#include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -41,21 +41,16 @@ void RAFile::open(StringRef fileName)
 
 void RAFile::open(StringRef fileName, OpenMode_Enum mode, int32 permissions)
 {
-    ShortList<char, 256> charBuf;
-    uint64 fileNameLen;
-    char* charBufData;
-    int flags;
+    // TODO: Properly convert filename
+    size_t fileNameLen = fileName.length();
 
-    fileNameLen = fileName.length();
+    ShortList<char, 256> charBuf(fileNameLen+1);
 
-    charBuf.uninitializedResize(fileNameLen+1);
-
-    charBufData = charBuf.data();
-    ::memcpy(charBufData, fileName.data(), fileNameLen);
-    charBufData[fileNameLen] = '\0';
+    charBuf.addBlockBack(fileName.data(), fileNameLen);
+    charBuf.addBack('\0');
 
     // Don't inherit any fd
-    flags = O_CLOEXEC;
+    int flags = O_CLOEXEC;
 
     // Build permission flags
     // It's legal, if normally pointless, to have no read or write access.
@@ -96,11 +91,14 @@ void RAFile::open(StringRef fileName, OpenMode_Enum mode, int32 permissions)
         break;
     }
 
-    m_handle = UnixUtil::sys_open(charBufData, flags, 0666);
+    m_handle = UnixUtil::sys_open(charBuf.data(), flags, 0666);
 
     if (m_handle == -1)
     {
-        throw IOException(UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "open",
+                                         "RAFile::open");
+        throw IOException(error);
     }
 }
 
@@ -373,8 +371,10 @@ uint32 RAFile::read(char* buffer, uint32 bufferLen)
 
     if (res == -1)
     {
-        throw IOException(String("read() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "read",
+                                         "RAFile::read");
+        throw IOException(error);
     }
 
     return (uint32)res;
@@ -390,8 +390,10 @@ void RAFile::readFully(char* buffer, uint32 bufferLen)
 
         if (res == -1)
         {
-            throw IOException(String("read() call failed with: ") +
-                    UnixUtil::getLastErrorMessage());
+            Error error = UnixUtil::getError(errno,
+                                             "read",
+                                             "RAFile::readFully");
+            throw IOException(error);
         }
 
         totalRead += (size_t)res;
@@ -610,7 +612,7 @@ void RAFile::writeLEDouble(double value)
 
 void RAFile::writeString(String value)
 {
-
+    // TODO
 }
 
 void RAFile::write(const char* buffer, uint32 bufferLen)
@@ -621,8 +623,10 @@ void RAFile::write(const char* buffer, uint32 bufferLen)
 
     if (res == -1)
     {
-        throw IOException(String("write() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "write",
+                                         "RAFile::write");
+        throw IOException(error);
     }
 }
 
@@ -632,8 +636,10 @@ void RAFile::seek(uint64 pos)
 
     if (res == (off_t)-1)
     {
-        throw IOException(String("lseek() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "lseek",
+                                         "RAFile::seek");
+        throw IOException(error);
     }
 }
 
@@ -643,8 +649,10 @@ uint64 RAFile::getFileOffset()
 
     if (res == (off_t)-1)
     {
-        throw IOException(String("lseek() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "lseek",
+                                         "RAFile::getFileOffset");
+        throw IOException(error);
     }
 
     return res;
@@ -656,24 +664,30 @@ uint64 RAFile::fileLength()
 
     if (oldPos == (off_t)-1)
     {
-        throw IOException(String("lseek() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "lseek",
+                                         "RAFile::fileLength");
+        throw IOException(error);
     }
 
     off_t seekRes = ::lseek(m_handle, 0, SEEK_END);
 
     if (seekRes == (off_t)-1)
     {
-        throw IOException(String("lseek() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "lseek",
+                                         "RAFile::fileLength");
+        throw IOException(error);
     }
 
     off_t resetPos = ::lseek(m_handle, oldPos, SEEK_SET);
 
     if (resetPos == (off_t)-1)
     {
-        throw IOException(String("lseek() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "lseek",
+                                         "RAFile::fileLength");
+        throw IOException(error);
     }
 
     return seekRes;
@@ -685,8 +699,10 @@ void RAFile::setFileLength(uint64 length)
 
     if (res == -1)
     {
-        throw IOException(String("ftruncate() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "ftruncate",
+                                         "RAFile::setFileLength");
+        throw IOException(error);
     }
 }
 
@@ -696,7 +712,9 @@ void RAFile::sync()
 
     if (res == -1)
     {
-        throw IOException(String("fdatasync() call failed with: ") +
-                UnixUtil::getLastErrorMessage());
+        Error error = UnixUtil::getError(errno,
+                                         "fdatasync",
+                                         "RAFile::sync");
+        throw IOException(error);
     }
 }

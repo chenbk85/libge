@@ -3,6 +3,7 @@
 #ifndef UNIX_UTIL_H
 #define UNIX_UTIL_H
 
+#include "ge/Error.h"
 #include "ge/text/String.h"
 
 #include <poll.h> // nfds_t, pollfd, poll
@@ -15,6 +16,10 @@
  */
 namespace UnixUtil
 {
+    Error getError(int errorNumber,
+                   const char* context,
+                   const char* systemCall);
+
     String getLastErrorMessage();
 
     String getErrorMessage(int errorNumber);

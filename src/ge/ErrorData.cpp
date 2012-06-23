@@ -41,7 +41,6 @@ const char* commonErrorStrings[] =
     "err_invalid_seek",
     "err_no_space_on_device",
     "err_no_such_device",
-    "err_no_such_file_or_directory",
 
     // File link errors
     "err_cross_device_link",

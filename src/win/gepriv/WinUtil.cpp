@@ -5,12 +5,10 @@
 #include <Winsock2.h> // Must be before Windows.h
 #include <Windows.h>
 
-namespace WinUtil
-{
 
-Error getError(int errorNumber,
-               const char* context,
-               const char* systemCall)
+Error WinUtil::getError(int errorNumber,
+                        const char* context,
+                        const char* systemCall)
 {
     CommonError commonErr = err_unknown;
 
@@ -85,17 +83,17 @@ Error getError(int errorNumber,
                  systemCall);
 }
 
-String getLastErrorMessage()
+String WinUtil::getLastErrorMessage()
 {
 	return getErrorMessage(::GetLastError());
 }
 
-String getWSALastErrorMessage()
+String WinUtil::getWSALastErrorMessage()
 {
 	return getErrorMessage(::WSAGetLastError());
 }
 
-String getErrorMessage(int errorNumber)
+String WinUtil::getErrorMessage(int errorNumber)
 {
 	char* msgBuffer;
 
@@ -135,5 +133,3 @@ String getErrorMessage(int errorNumber)
 
 	return ret;
 }
-
-} // End namespace WinUtil

@@ -49,7 +49,6 @@ enum CommonError
     err_invalid_seek, // ESPIPE
     err_no_space_on_device, // ENOSPC, ERROR_HANDLE_DISK_FULL, ERROR_DISK_FULL
     err_no_such_device, // ENXIO, ENODEV
-    err_no_such_file_or_directory, // ENOENT
 
     // File link errors
     err_cross_device_link, // EXDEV
