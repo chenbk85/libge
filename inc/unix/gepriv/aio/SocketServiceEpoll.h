@@ -8,9 +8,9 @@
 #include "gepriv/aio/SocketService.h"
 
 /*
- * SocketService implementation that uses the poll() system call.
+ * SocketService implementation that uses the epoll() system calls.
  */
-class SocketServiceEpoll
+class SocketServiceEpoll : public SocketService
 {
 public:
     SocketServiceEpoll();
@@ -20,6 +20,8 @@ public:
      * Calls read(), write() on ready sockets and triggers callbacks.
      */
     void process() OVERRIDE;
+
+    void shutdown() OVERRIDE;
 
     void submitClose(AioSocket* aioSocket,
                      AioServer::connectCallback callback,

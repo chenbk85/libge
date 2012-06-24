@@ -5,6 +5,9 @@
 
 #include <gepriv/aio/FileService.h>
 
+#include <ge/data/LinkedList.h>
+#include <ge/thread/Mutex.h>
+
 /*
  * FileService implementation that uses blocking IO
  */
@@ -18,6 +21,8 @@ public:
      * Triggers the blocking IO.
      */
     void process() OVERRIDE;
+
+    void shutdown() OVERRIDE;
 
     void submitRead(AioFile* aioFile,
                     AioServer::fileCallback callback,
@@ -36,6 +41,20 @@ public:
 private:
     FileServiceBlocking(const FileServiceBlocking&) DELETED;
     FileServiceBlocking& operator=(const FileServiceBlocking&) DELETED;
+
+    class QueueData
+    {
+    public:
+        bool isRead;
+        AioServer::fileCallback callback;
+        void* userData;
+        uint64 pos;
+        const char* buffer;
+        uint32 bufferLen;
+    };
+
+    Mutex _lock;
+    LinkedList<QueueData> _queue;
 };
 
 #endif // FILE_SERVICE_BLOCKING_H

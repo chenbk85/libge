@@ -8,7 +8,7 @@
 /*
  * SocketService implementation that uses the poll() system call.
  */
-class SocketServicePoll
+class SocketServicePoll : public SocketService
 {
 public:
     SocketServicePoll();
@@ -18,6 +18,8 @@ public:
      * Calls read(), write() on ready sockets and triggers callbacks.
      */
     void process() OVERRIDE;
+
+    void shutdown() OVERRIDE;
 
     void submitClose(AioSocket* aioSocket,
                      AioServer::connectCallback callback,

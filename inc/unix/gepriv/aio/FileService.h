@@ -23,6 +23,12 @@ public:
     virtual
     void process() = 0;
 
+    /*
+     * Shuts down the service.
+     */
+    virtual
+    void shutdown() = 0;
+
     virtual
     void submitRead(AioFile* aioFile,
                     AioServer::fileCallback callback,

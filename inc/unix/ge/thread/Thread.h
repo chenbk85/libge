@@ -15,7 +15,7 @@
  * to take a function object, but this requires a somewhat ugly template
  * parameter.
  */
-class Thread
+class Thread : public Runnable
 {
 public:
     /*
@@ -27,6 +27,17 @@ public:
      * Destroying the thread object does not effect the running task.
      */
     ~Thread();
+
+    /*
+     * Does nothing by default. You can inherit from Thread to specify some
+     * non-default behavior.
+     */
+    virtual void run() OVERRIDE;
+
+    /*
+     * Starts the thread, running the run() function.
+     */
+    void start();
 
     /*
      * Starts the thread, running the passed Runnable as its activity.
@@ -45,9 +56,9 @@ private:
     Thread& operator=(const Thread& other);
 
 private:
-    bool m_wasStarted;      // Set to true if the thread was ever started
-    bool m_isRunning;       // Set to true when the thread is started, false when joined
-    pthread_t m_id;         // Thread id
+    bool _wasStarted;  // Set to true if the thread was ever started
+    bool _isRunning;   // Set to true when the thread is started, false when joined
+    pthread_t _id;     // Thread id
 };
 
 #endif // UNIX_THREAD_H

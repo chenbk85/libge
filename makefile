@@ -51,6 +51,7 @@ SRCS = \
     src/unix/ge/io/Process.cpp \
     src/unix/ge/io/RAFile.cpp \
     src/unix/ge/thread/Condition.cpp \
+    src/unix/ge/thread/CurrentThread.cpp \
     src/unix/ge/thread/Mutex.cpp \
     src/unix/ge/thread/Once.cpp \
     src/unix/ge/thread/RWLock.cpp \

@@ -14,4 +14,9 @@ namespace CurrentThread
      * Sets the name of the current thread.
      */
     void setName(const StringRef name);
+
+    /*
+     * Yields the CPU to some other thread.
+     */
+    void yield();
 };

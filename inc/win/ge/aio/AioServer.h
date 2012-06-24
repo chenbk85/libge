@@ -21,10 +21,10 @@
  * the passed user callback.
  *
  * Note that some systems do not support all asynchronous operations. These
- * will be emulated by having a worker thread call an equivilant blocking
+ * will be emulated by having a worker thread call an equivalent blocking
  * function.
  *
- * Even if the system does support asynchonous IO, some normally asynchronous
+ * Even if the system does support asynchronous IO, some normally asynchronous
  * operations can block in some situations (extending a file, for example).
  * You need to tune the number of worker threads to account for the time
  * spent in callbacks and the expected level of blocking.
@@ -55,7 +55,7 @@ public:
     AioServer();
     ~AioServer();
 
-    Error startServing(uint32 desiredThreads);
+    void startServing(uint32 desiredThreads);
 
     void shutdown();
 

@@ -19,6 +19,11 @@ void FileServiceLinuxAio::process()
 
 }
 
+void FileServiceLinuxAio::shutdown()
+{
+
+}
+
 void FileServiceLinuxAio::submitRead(AioFile* aioFile,
                                      AioServer::fileCallback callback,
                                      void* userData,

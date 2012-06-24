@@ -8,7 +8,7 @@
 #include <gepriv/aio/FileService.h>
 
 /*
- * FileService implementation that uses blocking IO
+ * FileService implementation that uses Linux file aio.
  */
 class FileServiceLinuxAio : public FileService
 {
@@ -16,10 +16,9 @@ public:
     FileServiceLinuxAio();
     ~FileServiceLinuxAio();
 
-    /*
-     * Triggers the blocking IO.
-     */
     void process() OVERRIDE;
+
+    void shutdown() OVERRIDE;
 
     void submitRead(AioFile* aioFile,
                     AioServer::fileCallback callback,

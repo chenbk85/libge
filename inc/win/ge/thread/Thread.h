@@ -16,7 +16,7 @@
  * to take a function object, but this requires a somewhat ugly template
  * parameter.
  */
-class Thread
+class Thread : public Runnable
 {
 public:
     /*
@@ -33,7 +33,7 @@ public:
      * Does nothing by default. You can inherit from Thread to specify some
      * non-default behavior.
      */
-    virtual void run();
+    virtual void run() OVERRIDE;
 
     /*
      * Starts the thread, running the run() function.

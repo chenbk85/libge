@@ -17,6 +17,11 @@ void FileServiceBlocking::process()
 
 }
 
+void FileServiceBlocking::shutdown()
+{
+
+}
+
 void FileServiceBlocking::submitRead(AioFile* aioFile,
                                      AioServer::fileCallback callback,
                                      void* userData,

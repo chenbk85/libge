@@ -8,7 +8,12 @@
 #include <ge/aio/AioFile.h>
 #include <ge/aio/AioSocket.h>
 #include <ge/data/List.h>
+#include <ge/thread/Condition.h>
+#include <ge/thread/Thread.h>
 #include <ge/thread/Mutex.h>
+
+class FileService;
+class SocketService;
 
 /*
  * Server that allows asynchronous operations on files and sockets.
@@ -21,10 +26,10 @@
  * the passed user callback.
  *
  * Note that some systems do not support all asynchronous operations. These
- * will be emulated by having a worker thread call an equivilant blocking
+ * will be emulated by having a worker thread call an equivalent blocking
  * function.
  *
- * Even if the system does support asynchonous IO, some normally asynchronous
+ * Even if the system does support asynchronous IO, some normally asynchronous
  * operations can block in some situations (extending a file, for example).
  * You need to tune the number of worker threads to account for the time
  * spent in callbacks and the expected level of blocking.
@@ -33,6 +38,8 @@ class AioServer
 {
     friend class AioFile;
     friend class AioSocket;
+    friend class FileService;
+    friend class SocketService;
     friend class AioWorker;
 
 public:
@@ -115,17 +122,39 @@ public:
                         uint32 writeLen);
 
 private:
-    Error addFile(AioFile* aioFile,
-                  const char* context);
-    Error addSocket(AioSocket* aioSocket,
-                    const char* context);
-
+    void addFile(AioFile* aioFile);
+    void addSocket(AioSocket* aioSocket);
     void dropFile(AioFile* aioFile);
     void dropSocket(AioSocket* aioSocket);
 
+    void fileIoReady();
+    void socketIoReady();
+
     bool process();
 
+    class AioWorker : public Thread
+    {
+    public:
+        AioWorker(AioServer* aioServer);
+        void run() OVERRIDE;
 
+    private:
+        AioServer* _aioServer;
+    };
+
+    Condition _cond;
+    uint32 _fileReadyCount;        // Number of file IO operations ready
+    uint32 _socketReadyCount;      // Number of socket IO operations ready
+
+    FileService* _fileService;     // FileService handling file io
+    SocketService* _socketService; // SocketService handling socket io
+
+    List<AioWorker*> _threads;     // List of threads created
+
+    Mutex _stateLock;              // Lock for state, set of files and sockets
+    uint32 _state;                 // State flag
+    List<AioFile*> _files;         // Set of files
+    List<AioSocket*> _sockets;     // Set of sockets
 };
 
 #endif // AIO_SERVER_H

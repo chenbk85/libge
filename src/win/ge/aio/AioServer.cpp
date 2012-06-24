@@ -100,6 +100,7 @@ struct OVERLAPPED_EX
     void*             callback;
     void*             userData;
 
+    // TODO: Anonymous union
     // Accept only fields
     AioSocket*        acceptedSocket;
     char              addressBuffer[ACCEPTEX_ADDRESS_SIZE * 2];
@@ -230,6 +231,10 @@ Error handleConnectSuccess(OVERLAPPED_EX* overlappedEx,
     return Error();
 }
 
+/*
+ * Worker thread that calls the owner's process() method until it returns
+ * false.
+ */
 class AioWorker : public Thread
 {
 public:
@@ -242,12 +247,13 @@ public:
     {
         CurrentThread::setName("AioWorker");
 
-        bool keepGoing = true;
+        bool keepGoing;
 
-        while (keepGoing)
+        do
         {
             keepGoing = _aioServer->process();
         }
+        while (keepGoing);
     }
 
 private:
@@ -263,10 +269,17 @@ AioServer::AioServer() :
 
 AioServer::~AioServer()
 {
-    shutdown();
+    try
+    {
+        shutdown();
+    }
+    catch (...)
+    {
+        // TODO: log
+    }
 }
 
-Error AioServer::startServing(uint32 desiredThreads)
+void AioServer::startServing(uint32 desiredThreads)
 {
     LONG oldState = ::InterlockedCompareExchange(&_state, STATE_STARTED, STATE_NONE);
 
@@ -284,13 +297,14 @@ Error AioServer::startServing(uint32 desiredThreads)
 
     if (_completionPort == NULL)
     {
-        return WinUtil::getError(::GetLastError(),
+        Error error = WinUtil::getError(::GetLastError(),
             "CreateIoCompletionPort",
             "AioServer::startServing");
+        throw IOException(error);
     }
 
     // Create worker threads
-
+    // If this throws we're depending on the destructor for cleanup
     for (uint32 i = 0; i < desiredThreads; i++)
     {
         AioWorker* worker = new AioWorker(this);
@@ -1071,6 +1085,8 @@ Error AioServer::addSocket(AioSocket* aioSocket,
 
 void AioServer::dropFile(AioFile* aioFile)
 {
+    lock.lock();
+
     size_t fileCount = _files.size();
     for (size_t i = 0; i < fileCount; i++)
     {
@@ -1082,10 +1098,14 @@ void AioServer::dropFile(AioFile* aioFile)
             return;
         }
     }
+
+    lock.unlock();
 }
 
 void AioServer::dropSocket(AioSocket* aioSocket)
 {
+    lock.lock();
+
     size_t socketCount = _sockets.size();
     for (size_t i = 0; i < socketCount; i++)
     {
@@ -1097,6 +1117,8 @@ void AioServer::dropSocket(AioSocket* aioSocket)
             return;
         }
     }
+
+    lock.unlock();
 }
 
 bool AioServer::process()

@@ -3,6 +3,7 @@
 #include "ge/thread/Thread.h"
 
 #include "ge/SystemException.h"
+#include "ge/io/Console.h"
 #include "gepriv/UnixUtil.h"
 
 // Internal function required by the pthread API.
@@ -17,8 +18,8 @@ public:
 };
 
 Thread::Thread() :
-    m_wasStarted(false),
-    m_isRunning(false)
+    _wasStarted(false),
+    _isRunning(false)
 {
 
 }
@@ -26,58 +27,77 @@ Thread::Thread() :
 Thread::~Thread()
 {
     // Just detach the thread
-    if (m_wasStarted)
+    if (_wasStarted)
     {
-        ::pthread_detach(m_id);
+        ::pthread_detach(_id);
     }
+}
+
+void Thread::run()
+{
+    // Exciting default implementation
+}
+
+void Thread::start()
+{
+    start(this, false);
 }
 
 void Thread::start(Runnable* runnable, bool autoDelete)
 {
-    if (m_wasStarted)
+    if (_wasStarted)
     {
         throw SystemException("Thread already started");
     }
 
+    // Create the thread parameter
     threadParam* param = new threadParam();
     param->runnable = runnable;
     param->autoDelete = autoDelete;
 
-    m_wasStarted = true;
-    m_isRunning = true;
+    _wasStarted = true;
+    _isRunning = true;
 
     pthread_attr_t attr;
     ::pthread_attr_init(&attr);
 
-    int32 error = ::pthread_create(&m_id, // Thread id
+    int pthreadErr = ::pthread_create(&_id, // Thread id
             &attr, // Attributes
             taskStarter, // Function to call
             param); // Function argument
 
-    if (error != 0)
+    if (pthreadErr != 0)
     {
-        throw SystemException(String("Failed to start thread: ") +
-            UnixUtil::getErrorMessage(error));
+        _wasStarted = false;
+        _isRunning = false;
+        delete param;
+
+        Error error = UnixUtil::getError(pthreadErr,
+                                         "pthread_create",
+                                         "Thread::start");
+        throw SystemException(error);
     }
 }
 
 void Thread::join()
 {
-    if (!m_isRunning)
+    if (!_isRunning)
     {
         throw SystemException("Failed to join thread: Thread not running");
     }
 
     // Try to join the thread
-    int32 error = ::pthread_join(m_id, NULL);
+    int32 pthreadErr = ::pthread_join(_id, NULL);
 
-    if (error)
+    if (pthreadErr != 0)
     {
-        throw SystemException(String("Failed to join thread: ") +
-            UnixUtil::getErrorMessage(error));
+        Error error = UnixUtil::getError(pthreadErr,
+                                         "pthread_join",
+                                         "Thread::join");
+        throw SystemException(error);
     }
 
-    m_isRunning = false;
+    _isRunning = false;
 }
 
 /*
@@ -94,6 +114,7 @@ static void* taskStarter(void * arg)
     }
     catch (...)
     {
+        Console::outln("Uncaught exception");
         // TODO: Log
     }
 

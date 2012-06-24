@@ -17,6 +17,11 @@ void SocketServicePoll::process()
 
 }
 
+void SocketServicePoll::shutdown()
+{
+
+}
+
 void SocketServicePoll::submitClose(AioSocket* aioSocket,
                                     AioServer::connectCallback callback,
                                     void* userData)

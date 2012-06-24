@@ -16,7 +16,6 @@ static unsigned __stdcall taskStarter(void* arg);
 class threadParam
 {
 public:
-    Thread* thread;
     Runnable* runnable;
     bool autoDelete;
 };
@@ -38,12 +37,12 @@ Thread::~Thread()
 
 void Thread::run()
 {
-    // Do nothing
+    // Exciting default implementation
 }
 
 void Thread::start()
 {
-    start(NULL, false);
+    start(this, false);
 }
 
 void Thread::start(Runnable* runnable, bool autoDelete)
@@ -54,7 +53,6 @@ void Thread::start(Runnable* runnable, bool autoDelete)
     }
 
     threadParam* param = new threadParam();
-    param->thread = this;
     param->runnable = runnable;
     param->autoDelete = autoDelete;
 
@@ -105,14 +103,7 @@ static unsigned __stdcall taskStarter(void* arg)
 
     try
     {
-        if (param->runnable)
-        {
-            param->runnable->run();
-        }
-        else
-        {
-            param->thread->run();
-        }
+        param->runnable->run();
     }
     catch (...)
     {

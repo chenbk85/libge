@@ -19,6 +19,11 @@ void SocketServiceEpoll::process()
 
 }
 
+void SocketServiceEpoll::shutdown()
+{
+
+}
+
 void SocketServiceEpoll::submitClose(AioSocket* aioSocket,
                                      AioServer::connectCallback callback,
                                      void* userData)
