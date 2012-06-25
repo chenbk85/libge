@@ -38,9 +38,11 @@ class AioServer
 {
     friend class AioFile;
     friend class AioSocket;
-    friend class FileService;
-    friend class SocketService;
     friend class AioWorker;
+    friend class FileServiceBlocking;
+    friend class FileServiceLinuxAio;
+    friend class SocketServicePoll;
+    friend class SocketServiceEpoll;
 
 public:
     typedef void (*fileCallback)(AioFile* aioFile,
@@ -145,14 +147,14 @@ private:
     Condition _cond;
     uint32 _fileReadyCount;        // Number of file IO operations ready
     uint32 _socketReadyCount;      // Number of socket IO operations ready
+    uint32 _state;                 // State flag
 
     FileService* _fileService;     // FileService handling file io
     SocketService* _socketService; // SocketService handling socket io
 
     List<AioWorker*> _threads;     // List of threads created
 
-    Mutex _stateLock;              // Lock for state, set of files and sockets
-    uint32 _state;                 // State flag
+    Mutex _childLock;              // Lock for set of files and sockets
     List<AioFile*> _files;         // Set of files
     List<AioSocket*> _sockets;     // Set of sockets
 };

@@ -2,9 +2,9 @@
 
 #include "gepriv/aio/SocketServicePoll.h"
 
-SocketServicePoll::SocketServicePoll()
+SocketServicePoll::SocketServicePoll(AioServer* aioServer) :
+    _aioServer(aioServer)
 {
-
 }
 
 SocketServicePoll::~SocketServicePoll()

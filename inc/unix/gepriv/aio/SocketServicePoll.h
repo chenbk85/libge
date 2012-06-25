@@ -3,7 +3,12 @@
 #ifndef SOCKET_SERVICE_POLL_H
 #define SOCKET_SERVICE_POLL_H
 
+#include <ge/aio/AioServer.h>
+#include <ge/data/HashMap.h>
+#include <ge/data/List.h>
 #include <gepriv/aio/SocketService.h>
+
+#include <poll.h>
 
 /*
  * SocketService implementation that uses the poll() system call.
@@ -11,7 +16,7 @@
 class SocketServicePoll : public SocketService
 {
 public:
-    SocketServicePoll();
+    SocketServicePoll(AioServer* aioServer);
     ~SocketServicePoll();
 
     /*
@@ -65,6 +70,31 @@ public:
 private:
     SocketServicePoll(const SocketServicePoll&) DELETED;
     SocketServicePoll& operator=(const SocketServicePoll&) DELETED;
+
+    class SendfileData
+    {
+    public:
+        char buffer[1024];
+        uint32 bufferPos;
+        uint32 bufferFilled;
+        uint64 filePos;
+    };
+
+    class SockData
+    {
+    public:
+        AioSocket* aioSocket;
+        uint32 operMap;
+        void* readCallback; // Callback for accept, recv
+        void* writeCallback; // Callback for connect, send, sendfile
+        SendfileData* sendfileData;
+    };
+
+    AioServer* _aioServer;
+
+    Mutex _lock;
+    List<pollfd> _pollfdList;
+    HashMap<int, SockData> _dataMap;
 };
 
 #endif // SOCKET_SERVICE_POLL_H

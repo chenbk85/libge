@@ -14,21 +14,36 @@ class Locker
 {
 public:
     Locker(T& lockable) :
-        target(lockable)
+        _target(lockable)
     {
-        target.lock();
+        _target.lock();
+        _locked = true;
     }
 
     ~Locker()
     {
-        target.unlock();
+        if (_locked)
+            _target.unlock();
+    }
+
+    void lock()
+    {
+        _target.lock();
+        _locked = true;
+    }
+
+    void unlock()
+    {
+        _target.unlock();
+        _locked = false;
     }
 
 private:
     Locker(const Locker&) {}
     Locker& operator=(const Locker&) {}
 
-    T& target;
+    bool _locked;
+    T& _target;
 };
 
 #endif // LOCKER_H

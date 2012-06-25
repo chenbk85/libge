@@ -5,7 +5,9 @@
 #ifndef SOCKET_SERVICE_EPOLL_H
 #define SOCKET_SERVICE_EPOLL_H
 
-#include "gepriv/aio/SocketService.h"
+#include <ge/aio/AioServer.h>
+#include <gepriv/aio/SocketService.h>
+
 
 /*
  * SocketService implementation that uses the epoll() system calls.
@@ -13,7 +15,7 @@
 class SocketServiceEpoll : public SocketService
 {
 public:
-    SocketServiceEpoll();
+    SocketServiceEpoll(AioServer* aioServer);
     ~SocketServiceEpoll();
 
     /*
@@ -67,6 +69,8 @@ public:
 private:
     SocketServiceEpoll(const SocketServiceEpoll&) DELETED;
     SocketServiceEpoll& operator=(const SocketServiceEpoll&) DELETED;
+
+    AioServer* _aioServer;
 };
 
 #endif // SOCKET_SERVICE_EPOLL_H

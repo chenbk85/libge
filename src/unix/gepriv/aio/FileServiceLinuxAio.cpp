@@ -4,9 +4,9 @@
 
 #include "gepriv/aio/FileServiceLinuxAio.h"
 
-FileServiceLinuxAio::FileServiceLinuxAio()
+FileServiceLinuxAio::FileServiceLinuxAio(AioServer* aioServer) :
+    _aioServer(aioServer)
 {
-
 }
 
 FileServiceLinuxAio::~FileServiceLinuxAio()

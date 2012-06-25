@@ -5,6 +5,7 @@
 
 #ifdef __linux__
 
+#include <ge/aio/AioServer.h>
 #include <gepriv/aio/FileService.h>
 
 /*
@@ -13,7 +14,7 @@
 class FileServiceLinuxAio : public FileService
 {
 public:
-    FileServiceLinuxAio();
+    FileServiceLinuxAio(AioServer aioServer);
     ~FileServiceLinuxAio();
 
     void process() OVERRIDE;
@@ -37,6 +38,8 @@ public:
 private:
     FileServiceLinuxAio(const FileServiceLinuxAio&) DELETED;
     FileServiceLinuxAio& operator=(const FileServiceLinuxAio&) DELETED;
+
+    AioServer _aioServer;
 };
 
 #endif // #ifdef __linux__

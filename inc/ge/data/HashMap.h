@@ -6,6 +6,8 @@
 #include <ge/common.h>
 #include <ge/data/Hasher.h>
 
+#include <string.h>
+
 /*
  * A basic hash table class.
  */
@@ -515,7 +517,7 @@ void HashMap<K, V, H>::Entry::set(V&& value)
 template <typename K,
           typename V,
           typename H>
-typename const HashMap<K, V, H>::Entry&
+const typename HashMap<K, V, H>::Entry&
     HashMap<K, V, H>::ConstIterator::value() const
 {
     return _tableVal->entry;
@@ -532,7 +534,7 @@ bool HashMap<K, V, H>::ConstIterator::isValid() const
 template <typename K,
           typename V,
           typename H>
-typename const HashMap<K, V, H>::Entry&
+const typename HashMap<K, V, H>::Entry&
     HashMap<K, V, H>::ConstIterator::next()
 {
     TableVal* ret = _tableVal;

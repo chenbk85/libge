@@ -16,6 +16,8 @@ class AioServer;
 class AioFile
 {
     friend class AioServer;
+    friend class FileServiceBlocking;
+    friend class FileServiceLinuxAio;
 
 public:
     AioFile();

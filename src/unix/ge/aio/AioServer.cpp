@@ -4,6 +4,7 @@
 
 #include "ge/io/IOException.h"
 #include "ge/thread/CurrentThread.h"
+#include "ge/util/Locker.h"
 
 #ifdef __linux__
 // Use linux aio for files and epoll
@@ -52,12 +53,12 @@ AioServer::AioServer() :
     {
 #ifdef __linux__
         // Use linux aio for files and epoll
-        _fileService = new FileServiceLinuxAio();
-        _socketService = new SocketServiceEpoll();
+        _fileService = new FileServiceLinuxAio(this);
+        _socketService = new SocketServiceEpoll(this);
 #else
         // Use blocking file io and poll
-        _fileService = new FileServiceBlocking();
-        _socketService = new SocketServicePoll();
+        _fileService = new FileServiceBlocking(this);
+        _socketService = new SocketServicePoll(this);
 #endif
     }
     catch (...)
@@ -85,22 +86,24 @@ AioServer::~AioServer()
 
 void AioServer::startServing(uint32 desiredThreads)
 {
-    uint32 oldState;
+    bool started;
 
-    _stateLock.lock();
-
-    oldState = _state;
+    _cond.lock();
 
     if (_state == STATE_NONE)
+    {
         _state = STATE_STARTED;
+        started = true;
+    }
 
-    _stateLock.unlock();
+    _cond.unlock();
 
-    if (_state != STATE_STARTED)
+    if (!started)
     {
         throw IOException("Cannot restart AioServer");
     }
 
+    // If this throws the destructor will cleanup
     for (uint32 i = 0; i < desiredThreads; i++)
     {
         AioWorker* worker = new AioWorker(this);
@@ -115,7 +118,7 @@ void AioServer::shutdown()
     // Check and flip state
     bool doShutdown = false;
 
-    _stateLock.lock();
+    _cond.lock();
 
     if (_state == STATE_STARTED)
     {
@@ -123,7 +126,7 @@ void AioServer::shutdown()
         doShutdown = true;
     }
 
-    _stateLock.unlock();
+    _cond.unlock();
 
     if (!doShutdown)
         return;
@@ -231,9 +234,9 @@ void AioServer::addFile(AioFile* aioFile)
     aioFile->_owner = this;
 
     // Add to the set of files
-    _stateLock.lock();
+    _childLock.lock();
     _files.addBack(aioFile);
-    _stateLock.unlock();
+    _childLock.unlock();
 }
 
 void AioServer::addSocket(AioSocket* aioSocket)
@@ -242,14 +245,14 @@ void AioServer::addSocket(AioSocket* aioSocket)
     aioSocket->_owner = this;
 
     // Add to the set of files
-    _stateLock.lock();
+    _childLock.lock();
     _sockets.addBack(aioSocket);
-    _stateLock.unlock();
+    _childLock.unlock();
 }
 
 void AioServer::dropFile(AioFile* aioFile)
 {
-    _stateLock.lock();
+    _childLock.lock();
 
     size_t fileCount = _files.size();
     for (size_t i = 0; i < fileCount; i++)
@@ -263,12 +266,12 @@ void AioServer::dropFile(AioFile* aioFile)
         }
     }
 
-    _stateLock.unlock();
+    _childLock.unlock();
 }
 
 void AioServer::dropSocket(AioSocket* aioSocket)
 {
-    _stateLock.lock();
+    _childLock.lock();
 
     size_t socketCount = _sockets.size();
     for (size_t i = 0; i < socketCount; i++)
@@ -282,10 +285,68 @@ void AioServer::dropSocket(AioSocket* aioSocket)
         }
     }
 
-    _stateLock.unlock();
+    _childLock.unlock();
+}
+
+void AioServer::fileIoReady()
+{
+    _cond.lock();
+    _fileReadyCount++;
+    _cond.signal();
+    _cond.unlock();
+}
+
+void AioServer::socketIoReady()
+{
+    _cond.lock();
+    _socketReadyCount++;
+    _cond.signal();
+    _cond.unlock();
 }
 
 bool AioServer::process()
 {
+    bool fileReady = false;
+    bool socketReady = false;
+
+    Locker<Condition> locker(_cond);
+
+    // Wait until there is some work or is shutdown
+    while (_state != STATE_SHUTDOWN &&
+           _fileReadyCount == 0 &&
+           _socketReadyCount == 0)
+    {
+        _cond.wait();
+    }
+
+    // Arbitrarily favoring socket IO at the moment as it is less likely
+    // to block
+    if (_socketReadyCount != 0)
+    {
+        _socketReadyCount--;
+        socketReady = true;
+    }
+    else if (_fileReadyCount != 0)
+    {
+        _fileReadyCount--;
+        fileReady = true;
+    }
+
+    locker.unlock();
+
+    // Differ work to the appropriate service
+    if (socketReady)
+    {
+        _socketService->process();
+    }
+    else if (fileReady)
+    {
+        _fileService->process();
+    }
+    else
+    {
+        return false;
+    }
+
     return true;
 }

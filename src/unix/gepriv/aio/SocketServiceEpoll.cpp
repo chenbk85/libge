@@ -4,9 +4,9 @@
 
 #include <gepriv/aio/SocketServiceEpoll.h>
 
-SocketServiceEpoll::SocketServiceEpoll()
+SocketServiceEpoll::SocketServiceEpoll(AioServer* aioServer) :
+    _aioServer(aioServer)
 {
-
 }
 
 SocketServiceEpoll::~SocketServiceEpoll()

@@ -3,10 +3,10 @@
 #ifndef FILE_SERVICE_BLOCKING_H
 #define FILE_SERVICE_BLOCKING_H
 
-#include <gepriv/aio/FileService.h>
-
-#include <ge/data/LinkedList.h>
+#include <ge/aio/AioServer.h>
+#include <ge/data/DLinkedList.h>
 #include <ge/thread/Mutex.h>
+#include <gepriv/aio/FileService.h>
 
 /*
  * FileService implementation that uses blocking IO
@@ -14,7 +14,7 @@
 class FileServiceBlocking : public FileService
 {
 public:
-    FileServiceBlocking();
+    FileServiceBlocking(AioServer* aioServer);
     ~FileServiceBlocking();
 
     /*
@@ -45,16 +45,19 @@ private:
     class QueueData
     {
     public:
+        AioFile* aioFile;
         bool isRead;
         AioServer::fileCallback callback;
         void* userData;
         uint64 pos;
-        const char* buffer;
+        char* buffer;
         uint32 bufferLen;
     };
 
+    AioServer* _aioServer;
+
     Mutex _lock;
-    LinkedList<QueueData> _queue;
+    DLinkedList<QueueData> _queue;
 };
 
 #endif // FILE_SERVICE_BLOCKING_H

@@ -14,6 +14,8 @@ class AioServer;
 class AioSocket
 {
     friend class AioServer;
+    friend class SocketServicePoll;
+    friend class SocketServiceEpoll;
 
 public:
     AioSocket();
