@@ -122,6 +122,8 @@ public:
     Iterator get(const Key& key);
     ConstIterator get(const Key& key) const;
 
+    void erase(Iterator& iter);
+
     size_t size() const;
 
 private:
@@ -401,6 +403,33 @@ typename HashMap<K, V, H>::ConstIterator HashMap<K, V, H>::get(const K& key) con
     }
 
     return ConstIterator(this, m_tableSize, NULL);
+}
+
+template <typename K,
+          typename V,
+          typename H>
+void HashMap<K, V, H>::erase(Iterator& iter)
+{
+    // Remove from the linked list
+    if (iter._tableVal == m_table[iter._tableIndex])
+    {
+        m_table[iter._tableIndex] = iter._tableVal->next;
+    }
+    else
+    {
+        TableVal* prev = m_table[iter._tableIndex];
+
+        while (prev->next != iter._tableVal)
+            prev = prev->next;
+
+        prev->next = iter._tableVal->next;
+    }
+
+    // Delete and invalidate the iterator
+    delete iter._tableVal;
+
+    iter._tableIndex = 0;
+    iter._tableVal = NULL;
 }
 
 template <typename K,

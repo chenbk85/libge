@@ -6,6 +6,7 @@
 #include <ge/aio/AioServer.h>
 #include <ge/data/HashMap.h>
 #include <ge/data/List.h>
+#include <ge/data/DLinkedList.h>
 #include <gepriv/aio/SocketService.h>
 
 #include <poll.h>
@@ -71,26 +72,34 @@ private:
     SocketServicePoll(const SocketServicePoll&) DELETED;
     SocketServicePoll& operator=(const SocketServicePoll&) DELETED;
 
-    class SendfileData
+    void wakeup();
+
+    struct SocketOper
     {
-    public:
-        char buffer[1024];
+        AioSocket* aioSocket;
+        uint32 operType;
+        int fileFd;
+        AioSocket* acceptSocket;
+        void* callback;
+        void* userData;
+        char* buffer;
         uint32 bufferPos;
-        uint32 bufferFilled;
-        uint64 filePos;
+        uint32 bufferLen;
     };
 
-    class SockData
+    struct SockData
     {
-    public:
-        AioSocket* aioSocket;
-        uint32 operMap;
-        void* readCallback; // Callback for accept, recv
-        void* writeCallback; // Callback for connect, send, sendfile
-        SendfileData* sendfileData;
+        SocketOper readOper;
+        SocketOper writeOper;
+        char* sendFileBuf;
     };
 
     AioServer* _aioServer;
+
+    int _wakeupPipe[2];
+
+    Condition _cond;
+    DLinkedList<SocketOper*> operQueue;
 
     Mutex _lock;
     List<pollfd> _pollfdList;
