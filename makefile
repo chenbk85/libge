@@ -1,16 +1,14 @@
 # libge makefile
 
-
+# Build commands and common flags
 CC = g++
-CCFLAGS = -std=gnu++11 -O2 -Iinc -Iinc/unix
+CCFLAGS = -std=gnu++11 -O2 -march=native -Iinc -Iinc/unix
 LD = g++
 LDFLAGS = -lpthread
 
 RM = rm -f
 
-#OBJDIR = objects
-#DEPDIR = deps
-
+# List of all source files.
 SRCS = \
     testmain.cpp \
     src/ge/ErrorData.cpp \
@@ -67,6 +65,10 @@ SRCS = \
 DEPS = $(SRCS:.cpp=.d)
 
 OBJS = $(SRCS:.cpp=.o)
+
+# Default build rule, must be first
+.PHONY : all
+all : libgetest
 
 # Main rule to build application
 libgetest: $(DEPS) $(OBJS)

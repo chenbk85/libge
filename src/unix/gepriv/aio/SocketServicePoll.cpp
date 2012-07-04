@@ -11,12 +11,11 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
-#define FLAG_CLOSE 0x1
-#define FLAG_ACCEPT 0x2
-#define FLAG_CONNECT 0x4
-#define FLAG_READ 0x8
-#define FLAG_WRITE 0x10
-#define FLAG_SENDFILE 0x20
+#define FLAG_ACCEPT 0x1
+#define FLAG_CONNECT 0x2
+#define FLAG_READ 0x4
+#define FLAG_WRITE 0x8
+#define FLAG_SENDFILE 0x10
 
 
 SocketServicePoll::SocketServicePoll(AioServer* aioServer) :
@@ -62,34 +61,11 @@ void SocketServicePoll::shutdown()
 
 }
 
-void SocketServicePoll::submitClose(AioSocket* aioSocket,
-                                    AioServer::connectCallback callback,
-                                    void* userData)
-{
-    /*
-    Locker<Mutex> locker(_lock);
-
-    HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_fd);
-
-    if (iter.isValid())
-    {
-        HashMap<int, SockData>::Entry entry = iter.value();
-
-        ::close(
-    }
-    else
-    {
-        // TODO: Do what?
-    }
-    */
-}
-
 void SocketServicePoll::submitAccept(AioSocket* listenSocket,
                                      AioSocket* acceptSocket,
                                      AioServer::acceptCallback callback,
                                      void* userData)
 {
-    /*
     Locker<Mutex> locker(_lock);
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_fd);
@@ -99,21 +75,27 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
         HashMap<int, SockData>::Entry entry = iter.value();
 
         // TODO: Should check socket state?
-        if (entry._value.operMap != 0)
+        if (entry._value.operMask != 0)
         {
             throw IOException("Cannot accept on socket performing another operation");
         }
 
-        entry._value.operMap = FLAG_ACCEPT;
-        entry._value.readCallback = callback;
+        entry._value.readOper = FLAG_ACCEPT;
+        entry._value.operMask = POLLIN;
+        entry._value.readOper.callback = callback;
+        entry._value.readOper.aioSocket = listenSocket;
+        entry._value.readOper.acceptSocket = acceptSocket;
+        entry._value.readOper.userData = userData;
     }
     else
     {
-        SockData* newData = new SockData();
-        newData->aioSocket = listenSocket;
-        newData->acceptSocket = acceptSocket;
-        newData->readCallback = callback;
-        newData->readUserData = userData;
+        SockData newData = new SockData();
+        newData.readOper = FLAG_ACCEPT;
+        newData.operMask = POLLIN;
+        newData.readOper.aioSocket = listenSocket;
+        newData.readOper.acceptSocket = acceptSocket;
+        newData.readOper.callback = callback;
+        newData.readOper.userData = userData;
 
         try
         {
@@ -128,7 +110,6 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
 
     locker.unlock();
     wakeup();
-    */
 }
 
 void SocketServicePoll::submitConnect(AioSocket* aioSocket,
@@ -219,6 +200,17 @@ void SocketServicePoll::socketSendFile(AioSocket* aioSocket,
                                        uint32 writeLen)
 {
 
+}
+
+void SocketServicePoll::emptyWakePipe()
+{
+    char buffer[255];
+    int res;
+
+    do
+    {
+        res = ::read(_wakeupPipe[0], buffer, sizeof(buffer));
+    } while (res == -1 && errno == EINTR);
 }
 
 void SocketServicePoll::wakeup()

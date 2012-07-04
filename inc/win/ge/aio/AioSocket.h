@@ -35,6 +35,8 @@ private:
     AioSocket(const AioSocket& other) DELETED;
     AioSocket& operator=(const AioSocket& other) DELETED;
 
+    int _fd;
+
     INetProt_Enum _family;
     SOCKET _winSocket;
     AioServer* _owner;

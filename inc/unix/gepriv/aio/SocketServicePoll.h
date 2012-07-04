@@ -72,6 +72,7 @@ private:
     SocketServicePoll(const SocketServicePoll&) DELETED;
     SocketServicePoll& operator=(const SocketServicePoll&) DELETED;
 
+    void emptyWakePipe();
     void wakeup();
 
     struct SocketOper
@@ -92,6 +93,7 @@ private:
         SocketOper readOper;
         SocketOper writeOper;
         char* sendFileBuf;
+        uint32 operMask;
     };
 
     AioServer* _aioServer;
@@ -99,7 +101,7 @@ private:
     int _wakeupPipe[2];
 
     Condition _cond;
-    DLinkedList<SocketOper*> operQueue;
+    DLinkedList<SocketOper*> _operQueue;
 
     Mutex _lock;
     List<pollfd> _pollfdList;
