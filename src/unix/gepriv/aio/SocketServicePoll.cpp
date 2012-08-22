@@ -68,44 +68,38 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
 {
     Locker<Mutex> locker(_lock);
 
-    HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_fd);
+    HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_sockFd);
 
     if (iter.isValid())
     {
         HashMap<int, SockData>::Entry entry = iter.value();
+        SockData& sockData = entry.getValue();
 
         // TODO: Should check socket state?
-        if (entry._value.operMask != 0)
+        if (sockData.operMask != 0)
         {
             throw IOException("Cannot accept on socket performing another operation");
         }
 
-        entry._value.readOper = FLAG_ACCEPT;
-        entry._value.operMask = POLLIN;
-        entry._value.readOper.callback = callback;
-        entry._value.readOper.aioSocket = listenSocket;
-        entry._value.readOper.acceptSocket = acceptSocket;
-        entry._value.readOper.userData = userData;
+        sockData.operMask = POLLIN;
+        sockData.readOper.operType = FLAG_ACCEPT;
+        sockData.readOper.callback = (void*)callback;
+        sockData.readOper.aioSocket = listenSocket;
+        sockData.readOper.acceptSocket = acceptSocket;
+        sockData.readOper.userData = userData;
     }
     else
     {
-        SockData newData = new SockData();
-        newData.readOper = FLAG_ACCEPT;
+        SockData newData;
+
         newData.operMask = POLLIN;
+        newData.readOper.operType = FLAG_ACCEPT;
+        newData.readOper.callback = (void*)callback;
         newData.readOper.aioSocket = listenSocket;
         newData.readOper.acceptSocket = acceptSocket;
-        newData.readOper.callback = callback;
         newData.readOper.userData = userData;
 
-        try
-        {
-            _dataMap.put(listenSocket->_fd, newData);
-        }
-        catch (...)
-        {
-            delete newData;
-            throw;
-        }
+        _dataMap.put(listenSocket->_sockFd, newData);
     }
 
     locker.unlock();
@@ -133,45 +127,42 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
                                       int32 port,
                                       int32 timeout)
 {
-    /*
     Locker<Mutex> locker(_lock);
 
-    HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_fd);
+    HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
     if (iter.isValid())
     {
         HashMap<int, SockData>::Entry entry = iter.value();
+        SockData& sockData = entry.getValue();
 
         // TODO: Should check socket state?
-        if (entry._value.operMap != 0)
+        if (sockData.operMask != 0)
         {
             throw IOException("Cannot connect on socket performing another operation");
         }
 
-        entry._value.operMap = FLAG_CONNECT;
-        entry._value.writeCallback = callback;
+        sockData.operMask = POLLOUT;
+        sockData.writeOper.operType = FLAG_CONNECT;
+        sockData.writeOper.callback = (void*)callback;
+        sockData.writeOper.aioSocket = aioSocket;
+        sockData.writeOper.userData = userData;
     }
     else
     {
-        SockData* newData = new SockData();
-        newData->aioSocket = listenSocket;
-        newData->writeCallback = callback;
-        newData->writeUserData = userData;
+        SockData newData;
 
-        try
-        {
-            _dataMap.put(listenSocket->_fd, newData);
-        }
-        catch (...)
-        {
-            delete newData;
-            throw;
-        }
+        newData.operMask = POLLOUT;
+        newData.writeOper.operType = FLAG_CONNECT;
+        newData.writeOper.callback = (void*)callback;
+        newData.writeOper.aioSocket = aioSocket;
+        newData.writeOper.userData = userData;
+
+        _dataMap.put(aioSocket->_sockFd, newData);
     }
 
     locker.unlock();
     wakeup();
-    */
 }
 
 void SocketServicePoll::socketRead(AioSocket* aioSocket,
@@ -180,7 +171,44 @@ void SocketServicePoll::socketRead(AioSocket* aioSocket,
                                    char* buffer,
                                    uint32 bufferLen)
 {
+    Locker<Mutex> locker(_lock);
 
+    HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
+
+    if (iter.isValid())
+    {
+        HashMap<int, SockData>::Entry entry = iter.value();
+        SockData& sockData = entry.getValue();
+
+        // TODO: Should check socket state?
+
+        sockData.operMask |= POLLIN;
+        sockData.readOper.operType = FLAG_READ;
+        sockData.readOper.callback = (void*)callback;
+        sockData.readOper.aioSocket = aioSocket;
+        sockData.readOper.userData = userData;
+        sockData.readOper.buffer = buffer;
+        sockData.readOper.bufferPos = 0;
+        sockData.readOper.bufferLen = bufferLen;
+    }
+    else
+    {
+        SockData newData;
+
+        newData.operMask = POLLIN;
+        newData.readOper.operType = FLAG_READ;
+        newData.readOper.callback = (void*)callback;
+        newData.readOper.aioSocket = aioSocket;
+        newData.readOper.userData = userData;
+        newData.readOper.buffer = buffer;
+        newData.readOper.bufferPos = 0;
+        newData.readOper.bufferLen = bufferLen;
+
+        _dataMap.put(aioSocket->_sockFd, newData);
+    }
+
+    locker.unlock();
+    wakeup();
 }
 
 void SocketServicePoll::socketWrite(AioSocket* aioSocket,
@@ -189,7 +217,44 @@ void SocketServicePoll::socketWrite(AioSocket* aioSocket,
                                     const char* buffer,
                                     uint32 bufferLen)
 {
+    Locker<Mutex> locker(_lock);
 
+    HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
+
+    if (iter.isValid())
+    {
+        HashMap<int, SockData>::Entry entry = iter.value();
+        SockData& sockData = entry.getValue();
+
+        // TODO: Should check socket state?
+
+        sockData.operMask |= POLLOUT;
+        sockData.writeOper.operType = FLAG_WRITE;
+        sockData.writeOper.callback = (void*)callback;
+        sockData.writeOper.aioSocket = aioSocket;
+        sockData.writeOper.userData = userData;
+        sockData.writeOper.buffer = (char*)buffer;
+        sockData.writeOper.bufferPos = 0;
+        sockData.writeOper.bufferLen = bufferLen;
+    }
+    else
+    {
+        SockData newData;
+
+        newData.operMask = POLLOUT;
+        newData.writeOper.operType = FLAG_WRITE;
+        newData.writeOper.callback = (void*)callback;
+        newData.writeOper.aioSocket = aioSocket;
+        newData.writeOper.userData = userData;
+        newData.writeOper.buffer = (char*)buffer;
+        newData.writeOper.bufferPos = 0;
+        newData.writeOper.bufferLen = bufferLen;
+
+        _dataMap.put(aioSocket->_sockFd, newData);
+    }
+
+    locker.unlock();
+    wakeup();
 }
 
 void SocketServicePoll::socketSendFile(AioSocket* aioSocket,

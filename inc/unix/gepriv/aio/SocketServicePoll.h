@@ -27,10 +27,6 @@ public:
 
     void shutdown() OVERRIDE;
 
-    void submitClose(AioSocket* aioSocket,
-                     AioServer::connectCallback callback,
-                     void* userData) OVERRIDE;
-
     void submitAccept(AioSocket* listenSocket,
                       AioSocket* acceptSocket,
                       AioServer::acceptCallback callback,
@@ -79,7 +75,6 @@ private:
     {
         AioSocket* aioSocket;
         uint32 operType;
-        int fileFd;
         AioSocket* acceptSocket;
         void* callback;
         void* userData;

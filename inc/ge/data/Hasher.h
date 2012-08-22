@@ -46,6 +46,12 @@ inline uint32 hasher<int32>::operator()(int32 val) const
 }
 
 template<>
+inline uint32 hasher<const int32&>::operator()(const int32& val) const
+{
+    return (uint32)val;
+}
+
+template<>
 inline uint32 hasher<int64>::operator()(int64 val) const
 {
     uint32 high = (uint32)(val >> 32);

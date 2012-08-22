@@ -30,11 +30,6 @@ public:
     void shutdown() = 0;
 
     virtual
-    void submitClose(AioSocket* aioSocket,
-                     AioServer::connectCallback callback,
-                     void* userData) = 0;
-
-    virtual
     void submitAccept(AioSocket* listenSocket,
                       AioSocket* acceptSocket,
                       AioServer::acceptCallback callback,

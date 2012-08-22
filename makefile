@@ -1,5 +1,7 @@
 # libge makefile
 
+# TODO: Add -I/lib/modules/`uname -r`/build/include to include path to get linux version header?
+
 # Build commands and common flags
 CC = g++
 CCFLAGS = -std=gnu++11 -O2 -march=native -Iinc -Iinc/unix
