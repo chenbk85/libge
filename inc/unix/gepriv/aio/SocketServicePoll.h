@@ -71,32 +71,48 @@ private:
     void emptyWakePipe();
     void wakeup();
 
-    struct SocketOper
+    class SockData
     {
-        AioSocket* aioSocket;
-        uint32 operType;
-        AioSocket* acceptSocket;
-        void* callback;
-        void* userData;
-        char* buffer;
-        uint32 bufferPos;
-        uint32 bufferLen;
-    };
+    public:
+        SockData* readyNext;
 
-    struct SockData
-    {
-        SocketOper readOper;
-        SocketOper writeOper;
-        char* sendFileBuf;
+        AioSocket* aioSocket;
         uint32 operMask;
+
+        // Read data
+        uint32 readOper;
+        AioSocket* acceptSocket;
+        void* readCallback;
+        void* readUserData;
+        char* readBuffer;
+        uint32 readBufferPos;
+        uint32 readBufferLen;
+
+        // Write data
+        uint32 writeOper;
+        void* writeCallback;
+        void* writeUserData;
+        char* writeBuffer;
+        uint32 writeBufferPos;
+        uint32 writeBufferLen;
+
+        int sendFileFd;
+        char* sendFileBuf;
+        uint32 sendFileBufFilled;
+        uint32 sendFileBufIndex;
+        uint64 sendFileOffset;
+        uint64 sendFileEnd;
+
+        SockData();
+        ~SockData();
     };
 
     AioServer* _aioServer;
 
     int _wakeupPipe[2];
 
-    Condition _cond;
-    DLinkedList<SocketOper*> _operQueue;
+    //Condition _cond;
+    //DLinkedList<SocketOper*> _operQueue;
 
     Mutex _lock;
     List<pollfd> _pollfdList;

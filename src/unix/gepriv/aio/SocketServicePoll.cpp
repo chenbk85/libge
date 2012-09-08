@@ -17,6 +17,8 @@
 #define FLAG_WRITE 0x8
 #define FLAG_SENDFILE 0x10
 
+#define SEND_FILE_BUF_LEN 2048
+
 
 SocketServicePoll::SocketServicePoll(AioServer* aioServer) :
     _aioServer(aioServer)
@@ -82,22 +84,21 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
         }
 
         sockData.operMask = POLLIN;
-        sockData.readOper.operType = FLAG_ACCEPT;
-        sockData.readOper.callback = (void*)callback;
-        sockData.readOper.aioSocket = listenSocket;
-        sockData.readOper.acceptSocket = acceptSocket;
-        sockData.readOper.userData = userData;
+        sockData.readOper = FLAG_ACCEPT;
+        sockData.readCallback = (void*)callback;
+        sockData.acceptSocket = acceptSocket;
+        sockData.readUserData = userData;
     }
     else
     {
         SockData newData;
 
+        newData.aioSocket = listenSocket;
         newData.operMask = POLLIN;
-        newData.readOper.operType = FLAG_ACCEPT;
-        newData.readOper.callback = (void*)callback;
-        newData.readOper.aioSocket = listenSocket;
-        newData.readOper.acceptSocket = acceptSocket;
-        newData.readOper.userData = userData;
+        newData.readOper = FLAG_ACCEPT;
+        newData.readCallback = (void*)callback;
+        newData.acceptSocket = acceptSocket;
+        newData.readUserData = userData;
 
         _dataMap.put(listenSocket->_sockFd, newData);
     }
@@ -143,23 +144,24 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
         }
 
         sockData.operMask = POLLOUT;
-        sockData.writeOper.operType = FLAG_CONNECT;
-        sockData.writeOper.callback = (void*)callback;
-        sockData.writeOper.aioSocket = aioSocket;
-        sockData.writeOper.userData = userData;
+        sockData.writeOper = FLAG_CONNECT;
+        sockData.writeCallback = (void*)callback;
+        sockData.writeUserData = userData;
     }
     else
     {
         SockData newData;
 
+        newData.aioSocket = aioSocket;
         newData.operMask = POLLOUT;
-        newData.writeOper.operType = FLAG_CONNECT;
-        newData.writeOper.callback = (void*)callback;
-        newData.writeOper.aioSocket = aioSocket;
-        newData.writeOper.userData = userData;
+        newData.writeOper = FLAG_CONNECT;
+        newData.writeCallback = (void*)callback;
+        newData.writeUserData = userData;
 
         _dataMap.put(aioSocket->_sockFd, newData);
     }
+
+    // Call connect
 
     locker.unlock();
     wakeup();
@@ -183,26 +185,25 @@ void SocketServicePoll::socketRead(AioSocket* aioSocket,
         // TODO: Should check socket state?
 
         sockData.operMask |= POLLIN;
-        sockData.readOper.operType = FLAG_READ;
-        sockData.readOper.callback = (void*)callback;
-        sockData.readOper.aioSocket = aioSocket;
-        sockData.readOper.userData = userData;
-        sockData.readOper.buffer = buffer;
-        sockData.readOper.bufferPos = 0;
-        sockData.readOper.bufferLen = bufferLen;
+        sockData.readOper = FLAG_READ;
+        sockData.readCallback = (void*)callback;
+        sockData.readUserData = userData;
+        sockData.readBuffer = buffer;
+        sockData.readBufferPos = 0;
+        sockData.readBufferLen = bufferLen;
     }
     else
     {
         SockData newData;
 
+        newData.aioSocket = aioSocket;
         newData.operMask = POLLIN;
-        newData.readOper.operType = FLAG_READ;
-        newData.readOper.callback = (void*)callback;
-        newData.readOper.aioSocket = aioSocket;
-        newData.readOper.userData = userData;
-        newData.readOper.buffer = buffer;
-        newData.readOper.bufferPos = 0;
-        newData.readOper.bufferLen = bufferLen;
+        newData.readOper = FLAG_READ;
+        newData.readCallback = (void*)callback;
+        newData.readUserData = userData;
+        newData.readBuffer = buffer;
+        newData.readBufferPos = 0;
+        newData.readBufferLen = bufferLen;
 
         _dataMap.put(aioSocket->_sockFd, newData);
     }
@@ -229,26 +230,25 @@ void SocketServicePoll::socketWrite(AioSocket* aioSocket,
         // TODO: Should check socket state?
 
         sockData.operMask |= POLLOUT;
-        sockData.writeOper.operType = FLAG_WRITE;
-        sockData.writeOper.callback = (void*)callback;
-        sockData.writeOper.aioSocket = aioSocket;
-        sockData.writeOper.userData = userData;
-        sockData.writeOper.buffer = (char*)buffer;
-        sockData.writeOper.bufferPos = 0;
-        sockData.writeOper.bufferLen = bufferLen;
+        sockData.writeOper = FLAG_WRITE;
+        sockData.writeCallback = (void*)callback;
+        sockData.writeUserData = userData;
+        sockData.writeBuffer = (char*)buffer;
+        sockData.writeBufferPos = 0;
+        sockData.writeBufferLen = bufferLen;
     }
     else
     {
         SockData newData;
 
+        newData.aioSocket = aioSocket;
         newData.operMask = POLLOUT;
-        newData.writeOper.operType = FLAG_WRITE;
-        newData.writeOper.callback = (void*)callback;
-        newData.writeOper.aioSocket = aioSocket;
-        newData.writeOper.userData = userData;
-        newData.writeOper.buffer = (char*)buffer;
-        newData.writeOper.bufferPos = 0;
-        newData.writeOper.bufferLen = bufferLen;
+        newData.writeOper = FLAG_WRITE;
+        newData.writeCallback = (void*)callback;
+        newData.writeUserData = userData;
+        newData.writeBuffer = (char*)buffer;
+        newData.writeBufferPos = 0;
+        newData.writeBufferLen = bufferLen;
 
         _dataMap.put(aioSocket->_sockFd, newData);
     }
@@ -264,7 +264,53 @@ void SocketServicePoll::socketSendFile(AioSocket* aioSocket,
                                        uint64 pos,
                                        uint32 writeLen)
 {
+    Locker<Mutex> locker(_lock);
 
+    // TODO: Check if file is open
+
+    HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
+
+    if (iter.isValid())
+    {
+        HashMap<int, SockData>::Entry entry = iter.value();
+        SockData& sockData = entry.getValue();
+
+        // TODO: Should check socket state?
+
+        sockData.operMask |= POLLOUT;
+        sockData.writeOper = FLAG_SENDFILE;
+        sockData.writeCallback = (void*)callback;
+        sockData.writeUserData = userData;
+
+        if (sockData.sendFileBuf == NULL)
+            sockData.sendFileBuf = new char[SEND_FILE_BUF_LEN];
+
+        sockData.sendFileBufFilled = 0;
+        sockData.sendFileBufIndex = 0;
+        sockData.sendFileOffset = pos;
+        sockData.sendFileEnd = pos + writeLen;
+    }
+    else
+    {
+        SockData newData;
+
+        newData.aioSocket = aioSocket;
+        newData.operMask = POLLOUT;
+        newData.writeOper = FLAG_SENDFILE;
+        newData.writeCallback = (void*)callback;
+        newData.writeUserData = userData;
+
+        newData.sendFileBuf = new char[SEND_FILE_BUF_LEN];
+        newData.sendFileBufFilled = 0;
+        newData.sendFileBufIndex = 0;
+        newData.sendFileOffset = pos;
+        newData.sendFileEnd = pos + writeLen;
+
+        _dataMap.put(aioSocket->_sockFd, newData);
+    }
+
+    locker.unlock();
+    wakeup();
 }
 
 void SocketServicePoll::emptyWakePipe()
@@ -287,4 +333,38 @@ void SocketServicePoll::wakeup()
     {
         res = ::write(_wakeupPipe[1], data, 1);
     } while (res == -1 && errno == EINTR);
+}
+
+// Inner Classes ------------------------------------------------------------
+
+SocketServicePoll::SockData::SockData() :
+    readyNext(NULL),
+    aioSocket(NULL),
+    operMask(0),
+    readOper(0),
+    acceptSocket(NULL),
+    readCallback(NULL),
+    readUserData(NULL),
+    readBuffer(NULL),
+    readBufferPos(0),
+    readBufferLen(0),
+    writeOper(0),
+    writeCallback(NULL),
+    writeUserData(NULL),
+    writeBuffer(NULL),
+    writeBufferPos(0),
+    writeBufferLen(0),
+    sendFileFd(-1),
+    sendFileBuf(NULL),
+    sendFileBufFilled(0),
+    sendFileBufIndex(0),
+    sendFileOffset(0),
+    sendFileEnd(0)
+{
+
+}
+
+SocketServicePoll::SockData::~SockData()
+{
+    delete[] sendFileBuf;
 }
