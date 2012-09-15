@@ -24,10 +24,8 @@ public:
     Socket();
     ~Socket();
 
-#if defined(HAVE_RVALUE)
     Socket(Socket&& other);
     Socket& operator=(Socket&& other);
-#endif
 
     void init(INetProt_Enum family);
     void close();

@@ -6,10 +6,13 @@
 #include "ge/util/Locker.h"
 #include "gepriv/UnixUtil.h"
 
-#include <errno.h>
+#include <climits>
+#include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #define FLAG_ACCEPT 0x1
 #define FLAG_CONNECT 0x2
@@ -55,12 +58,85 @@ SocketServicePoll::~SocketServicePoll()
 
 void SocketServicePoll::process()
 {
+    while (true)
+    {
+        Locker<Condition> locker(_cond);
 
+        while (!_shutdown &&
+               _readyQueueHead == NULL)
+        {
+            _cond.wait();
+        }
+
+        if (_shutdown)
+            return;
+
+        // Pop an entry from the queue
+        QueueEntry* queueEntry = _readyQueueHead;
+        _readyQueueHead = queueEntry->next;
+
+        if (_readyQueueHead == NULL)
+        {
+            _readyQueueTail = NULL;
+        }
+        else
+        {
+            _readyQueueHead->prev = NULL;
+        }
+
+        locker.unlock();
+
+        // Take action depending on the data
+        SockData* sockData = queueEntry->data;
+        bool isRead = queueEntry->isRead;
+
+        Error error;
+        bool operComplete = false;
+
+        if (isRead)
+        {
+            if (sockData->readOper == FLAG_ACCEPT)
+            {
+                operComplete = handleAcceptReady(sockData, error);
+
+                if (operComplete)
+                {
+                    AioServer::acceptCallback callback = (AioServer::acceptCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->acceptSocket,
+                             sockData->readUserData,
+                             error);
+                }
+            }
+            else if (sockData->readOper == FLAG_READ)
+            {
+                operComplete = handleReadReady(sockData, error);
+
+                if (operComplete)
+                {
+                    AioServer::socketCallback callback = (AioServer::socketCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->readUserData,
+                             sockData->readBufferPos,
+                             error);
+                }
+            }
+        }
+        else
+        {
+
+        }
+    }
 }
 
 void SocketServicePoll::shutdown()
 {
+    _cond.lock();
+    _shutdown = true;
+    _cond.signalAll();
+    _cond.unlock();
 
+    // TODO: Join worker
 }
 
 void SocketServicePoll::submitAccept(AioSocket* listenSocket,
@@ -68,7 +144,16 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
                                      AioServer::acceptCallback callback,
                                      void* userData)
 {
-    Locker<Mutex> locker(_lock);
+    if (listenSocket->_sockFd != -1)
+    {
+        throw IOException("Can't accept with uninitialized socket");
+    }
+
+    // TODO: check if acceptSocket is initialized wrong
+
+    acceptSocket->init(listenSocket->_family);
+
+    Locker<Condition> locker(_cond);
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_sockFd);
 
@@ -128,7 +213,7 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
                                       int32 port,
                                       int32 timeout)
 {
-    Locker<Mutex> locker(_lock);
+    Locker<Condition> locker(_cond);
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
@@ -147,6 +232,8 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
         sockData.writeOper = FLAG_CONNECT;
         sockData.writeCallback = (void*)callback;
         sockData.writeUserData = userData;
+        sockData.connectAddress = address;
+        sockData.connectPort = port;
     }
     else
     {
@@ -157,11 +244,11 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
         newData.writeOper = FLAG_CONNECT;
         newData.writeCallback = (void*)callback;
         newData.writeUserData = userData;
+        newData.connectAddress = address;
+        newData.connectPort = port;
 
         _dataMap.put(aioSocket->_sockFd, newData);
     }
-
-    // Call connect
 
     locker.unlock();
     wakeup();
@@ -173,7 +260,7 @@ void SocketServicePoll::socketRead(AioSocket* aioSocket,
                                    char* buffer,
                                    uint32 bufferLen)
 {
-    Locker<Mutex> locker(_lock);
+    Locker<Condition> locker(_cond);
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
@@ -218,7 +305,7 @@ void SocketServicePoll::socketWrite(AioSocket* aioSocket,
                                     const char* buffer,
                                     uint32 bufferLen)
 {
-    Locker<Mutex> locker(_lock);
+    Locker<Condition> locker(_cond);
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
@@ -264,7 +351,7 @@ void SocketServicePoll::socketSendFile(AioSocket* aioSocket,
                                        uint64 pos,
                                        uint32 writeLen)
 {
-    Locker<Mutex> locker(_lock);
+    Locker<Condition> locker(_cond);
 
     // TODO: Check if file is open
 
@@ -335,10 +422,194 @@ void SocketServicePoll::wakeup()
     } while (res == -1 && errno == EINTR);
 }
 
+void* SocketServicePoll::pollFunc(void* threadData)
+{
+    SocketServicePoll* service = (SocketServicePoll*)threadData;
+}
+
+bool SocketServicePoll::handleAcceptReady(SockData* sockData, Error& error)
+{
+    INetProt_Enum family;
+    sockaddr_in ipv4Address;
+    sockaddr_in6 ipv6Address;
+    sockaddr* addrPtr;
+    socklen_t addrSize;
+    socklen_t* retAddrSize;
+    int ret;
+    int err;
+
+    family = sockData->aioSocket->_family;
+    retAddrSize = &addrSize;
+
+    // Set up the address
+    if (family == INET_PROT_IPV4)
+    {
+        ::memset(&ipv4Address, 0, sizeof(ipv4Address));
+        addrPtr = (sockaddr*)&ipv4Address;
+        addrSize = sizeof(ipv4Address);
+    }
+    else
+    {
+        ::memset(&ipv6Address, 0, sizeof(ipv6Address));
+        addrPtr = (sockaddr*)&ipv6Address;
+        addrSize = sizeof(ipv6Address);
+    }
+
+    // Accept
+    do
+    {
+        ret = ::accept(sockData->aioSocket->_sockFd, addrPtr, retAddrSize);
+    } while (ret == -1 && errno == EINTR);
+
+    if (ret != -1)
+    {
+        // Accept succeeded
+        sockData->acceptSocket->_sockFd = ret;
+        return true;
+    }
+    else
+    {
+        // Handle error
+        err = errno;
+
+        // If the error is that it would block, just keep going
+        if (err != EAGAIN || err != EWOULDBLOCK)
+        {
+            error = UnixUtil::getError(errno,
+                "SocketService::accept",
+                "accept");
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool SocketServicePoll::handleConnectReady(SockData* sockData, Error& error)
+{
+    sockaddr_in ipv4SockAddr;
+    sockaddr_in6 ipv6SockAddr;
+
+    INetProt_Enum family;
+    const sockaddr* sockAddrPtr;
+    socklen_t sockAddrLen;
+
+    const unsigned char* addrData;
+    int port;
+    int res;
+    int err;
+
+    family = sockData->aioSocket->_family;
+    addrData = sockData->connectAddress.getAddrData();
+    port = sockData->connectPort;
+
+    // Fill in the address information and prep the connect parameters
+    if (family == INET_PROT_IPV4)
+    {
+        ::memset(&ipv4SockAddr, 0, sizeof(ipv4SockAddr));
+
+        ipv4SockAddr.sin_family = AF_INET;
+        ::memcpy(&ipv4SockAddr.sin_addr, addrData, 4);
+        ipv4SockAddr.sin_port = htons(port);
+
+        sockAddrPtr = (const sockaddr*)&ipv4SockAddr;
+        sockAddrLen = sizeof(ipv4SockAddr);
+    }
+    else
+    {
+        ::memset(&ipv6SockAddr, 0, sizeof(ipv6SockAddr));
+
+        ipv6SockAddr.sin6_family = AF_INET6;
+        ::memcpy(&ipv6SockAddr.sin6_addr, addrData, 16);
+        ipv6SockAddr.sin6_port = htons(port);
+
+        sockAddrPtr = (const sockaddr*)&ipv6SockAddr;
+        sockAddrLen = sizeof(ipv6SockAddr);
+    }
+
+    // Do the call to connect
+    do
+    {
+        res = ::connect(sockData->aioSocket->_sockFd, sockAddrPtr, sockAddrLen);
+    }
+    while (res == -1 && errno == EINTR);
+
+    if (res == 0)
+    {
+        // Success
+        return true;
+    }
+    else
+    {
+        err = errno;
+
+        if (err != EINPROGRESS)
+        {
+            error = UnixUtil::getError(err,
+                "SocketService::connect",
+                "connect");
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SocketServicePoll::handleReadReady(SockData* sockData, Error& error)
+{
+    ssize_t res;
+    int err;
+    size_t recvLen;
+
+    recvLen = sockData->readBufferLen;
+
+    // Prevent overflow to negative
+    if (recvLen > INT_MAX)
+        recvLen = INT_MAX;
+
+    do
+    {
+        res = ::recv(sockData->aioSocket->_sockFd,
+                     sockData->readBuffer,
+                     recvLen,
+                     0);
+    }
+    while (res == -1 && errno == EINTR);
+
+    if (res != -1)
+    {
+        sockData->writeBufferPos = res;
+        return true;
+    }
+    else
+    {
+        err = errno;
+
+        if (err != EAGAIN &&
+            err != EWOULDBLOCK)
+        {
+            error = UnixUtil::getError(err,
+                "SocketService::read",
+                "recv");
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool SocketServicePoll::handleWriteReady(SockData* sockData, Error& error)
+{
+    return false;
+}
+
+bool SocketServicePoll::handleSendfileReady(SockData* sockData, Error& error)
+{
+    return false;
+}
+
 // Inner Classes ------------------------------------------------------------
 
 SocketServicePoll::SockData::SockData() :
-    readyNext(NULL),
     aioSocket(NULL),
     operMask(0),
     readOper(0),
@@ -354,6 +625,7 @@ SocketServicePoll::SockData::SockData() :
     writeBuffer(NULL),
     writeBufferPos(0),
     writeBufferLen(0),
+    connectPort(0),
     sendFileFd(-1),
     sendFileBuf(NULL),
     sendFileBufFilled(0),
@@ -361,7 +633,14 @@ SocketServicePoll::SockData::SockData() :
     sendFileOffset(0),
     sendFileEnd(0)
 {
-
+    readQueueEntry.isRead = true;
+    readQueueEntry.data = this;
+    readQueueEntry.prev = NULL;
+    readQueueEntry.next = NULL;
+    writeQueueEntry.isRead = false;
+    writeQueueEntry.data = this;
+    writeQueueEntry.prev = NULL;
+    writeQueueEntry.next = NULL;
 }
 
 SocketServicePoll::SockData::~SockData()

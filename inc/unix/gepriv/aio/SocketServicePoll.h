@@ -6,7 +6,7 @@
 #include <ge/aio/AioServer.h>
 #include <ge/data/HashMap.h>
 #include <ge/data/List.h>
-#include <ge/data/DLinkedList.h>
+#include <ge/thread/Condition.h>
 #include <gepriv/aio/SocketService.h>
 
 #include <poll.h>
@@ -68,13 +68,22 @@ private:
     SocketServicePoll(const SocketServicePoll&) DELETED;
     SocketServicePoll& operator=(const SocketServicePoll&) DELETED;
 
-    void emptyWakePipe();
-    void wakeup();
+    class SockData;
+
+    class QueueEntry
+    {
+    public:
+        bool isRead;
+        SockData* data;
+        QueueEntry* next;
+        QueueEntry* prev;
+    };
 
     class SockData
     {
     public:
-        SockData* readyNext;
+        QueueEntry readQueueEntry;
+        QueueEntry writeQueueEntry;
 
         AioSocket* aioSocket;
         uint32 operMask;
@@ -96,6 +105,9 @@ private:
         uint32 writeBufferPos;
         uint32 writeBufferLen;
 
+        INetAddress connectAddress;
+        int32 connectPort;
+
         int sendFileFd;
         char* sendFileBuf;
         uint32 sendFileBufFilled;
@@ -107,16 +119,31 @@ private:
         ~SockData();
     };
 
+    void emptyWakePipe();
+    void wakeup();
+
+    void enqueData(QueueEntry* queueEntry);
+
+    static void* pollFunc(void* threadData);
+
+    bool handleAcceptReady(SockData* sockData, Error& error);
+    bool handleConnectReady(SockData* sockData, Error& error);
+    bool handleReadReady(SockData* sockData, Error& error);
+    bool handleWriteReady(SockData* sockData, Error& error);
+    bool handleSendfileReady(SockData* sockData, Error& error);
+
+
     AioServer* _aioServer;
 
+    pthread_t _pollThread;
     int _wakeupPipe[2];
 
-    //Condition _cond;
-    //DLinkedList<SocketOper*> _operQueue;
-
-    Mutex _lock;
+    Condition _cond;
+    bool _shutdown;
     List<pollfd> _pollfdList;
     HashMap<int, SockData> _dataMap;
+    QueueEntry* _readyQueueHead;
+    QueueEntry* _readyQueueTail;
 };
 
 #endif // SOCKET_SERVICE_POLL_H

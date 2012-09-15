@@ -3,6 +3,7 @@
 #include <ge/inet/Socket.h>
 
 #include <ge/inet/INetException.h>
+#include <ge/io/IOException.h>
 #include <gepriv/UnixUtil.h>
 
 #include <cerrno>
@@ -165,7 +166,6 @@ Socket::~Socket()
     close();
 }
 
-#if defined(HAVE_RVALUE)
 Socket::Socket(Socket&& other)
 {
     m_fd = other.m_fd;
@@ -182,7 +182,6 @@ Socket& Socket::operator=(Socket&& other)
 
     return *this;
 }
-#endif
 
 void Socket::init(INetProt_Enum family)
 {
@@ -210,29 +209,6 @@ void Socket::init(INetProt_Enum family)
 
 void Socket::close()
 {
-    char discardBuffer[512];
-
-    // Start shutdown
-    int shutRet = ::shutdown(m_fd, SHUT_WR);
-
-    if (shutRet != 0)
-    {
-        // TODO: Log
-    }
-
-    // Receive until nothing to read or error
-    ssize_t recvRet;
-
-    do
-    {
-        recvRet = UnixUtil::sys_recv(m_fd, discardBuffer, sizeof(discardBuffer), 0);
-    } while (recvRet > 0);
-
-    if (recvRet == -1)
-    {
-        // TODO: Log
-    }
-
     // Close the socket
     ::close(m_fd);
     m_fd = -1;
@@ -266,50 +242,51 @@ void Socket::listen(int backlog)
 
 void Socket::accept(Socket* clientSocket)
 {
-    int32 sock;
+    sockaddr_in ipv4Address;
+    sockaddr_in6 ipv6Address;
+    sockaddr* addrPtr;
+    socklen_t addrSize;
+    socklen_t* retAddrSize;
+    int ret;
+
 
     if (clientSocket->m_fd != -1)
     {
         throw INetException("Can't accept with uninitialized socket");
     }
 
+    // Initialize the client socket
     clientSocket->init(m_family);
+
+    retAddrSize = &addrSize;
     
+    // Set up the address
     if (m_family == INET_PROT_IPV4)
     {
-        sockaddr_in ipv4Address;
         ::memset(&ipv4Address, 0, sizeof(ipv4Address));
-
-        int retAddrSize = sizeof(ipv4Address);
-        sock = UnixUtil::sys_accept(m_fd, (sockaddr*)&ipv4Address, &retAddrSize);
-
-        if (sock == -1)
-        {
-            throw INetException(UnixUtil::getLastErrorMessage());
-        }
-
-        ::memcpy(&clientSocket->m_connAddress.m_addr, &ipv4Address.sin_addr, 4);
-        ::memset(&clientSocket->m_connAddress.m_addr+4, 0, 12);
+        addrPtr = (sockaddr*)&ipv4Address;
+        addrSize = sizeof(ipv4Address);
     }
     else
     {
-        sockaddr_in6 ipv6Address;
         ::memset(&ipv6Address, 0, sizeof(ipv6Address));
-
-        int retAddrSize = sizeof(ipv6Address);
-        sock = UnixUtil::sys_accept(m_fd, (sockaddr*)&ipv6Address, &retAddrSize);
-
-        if (sock == -1)
-        {
-            throw INetException(UnixUtil::getLastErrorMessage());
-        }
-
-        ::memcpy(&clientSocket->m_connAddress.m_addr, &ipv6Address.sin6_addr, 16);
+        addrPtr = (sockaddr*)&ipv6Address;
+        addrSize = sizeof(ipv6Address);
     }
 
-    clientSocket->m_fd = sock;
-    clientSocket->m_family = m_family;
-    clientSocket->m_connAddress.m_family = m_family;
+    // Accept
+    do
+    {
+        ret = ::accept(m_fd, addrPtr, retAddrSize);
+    } while (ret == -1 && errno == EINTR);
+
+    // Handle error
+    if (ret == -1)
+    {
+        throw IOException(UnixUtil::getError(errno,
+            "Socket::accept",
+            "accept"));
+    }
 }
 
 void Socket::bind(const INetAddress& address, int port)
