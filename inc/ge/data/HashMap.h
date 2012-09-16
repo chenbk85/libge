@@ -6,7 +6,8 @@
 #include <ge/common.h>
 #include <ge/data/Hasher.h>
 
-#include <string.h>
+#include <cstring>
+#include <utility>
 
 /*
  * A basic hash table class.

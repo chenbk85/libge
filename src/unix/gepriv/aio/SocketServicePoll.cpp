@@ -3,6 +3,7 @@
 #include "gepriv/aio/SocketServicePoll.h"
 
 #include "ge/io/IOException.h"
+#include "ge/thread/CurrentThread.h"
 #include "ge/util/Locker.h"
 #include "gepriv/UnixUtil.h"
 
@@ -23,16 +24,33 @@
 #define SEND_FILE_BUF_LEN 2048
 
 
-SocketServicePoll::SocketServicePoll(AioServer* aioServer) :
-    _aioServer(aioServer)
+SocketService::SocketService() :
+    _isShutdown(false),
+    _pollWorker(this)
 {
+}
+
+SocketService::~SocketService()
+{
+    ::close(_wakeupPipe[0]);
+    ::close(_wakeupPipe[1]);
+}
+
+void SocketService::startServing(uint32 desiredThreads)
+{
+    Locker<Condition> locker(_cond);
+
+    if (_isShutdown)
+        throw IOException("Cannot restart shutdown SocketService");
+
+    // Create the wakeup pipe
     int pipeRes = ::pipe(_wakeupPipe);
 
     if (pipeRes != 0)
     {
         Error error = UnixUtil::getError(errno,
                                          "pipe",
-                                         "AioServer::AioServer");
+                                         "SocketService::AioServer");
         throw IOException(error);
     }
 
@@ -44,104 +62,51 @@ SocketServicePoll::SocketServicePoll(AioServer* aioServer) :
         {
             Error error = UnixUtil::getError(errno,
                                              "fcntl",
-                                             "AioServer::AioServer");
+                                             "SocketService::AioServer");
             throw IOException(error);
         }
     }
-}
 
-SocketServicePoll::~SocketServicePoll()
-{
-    ::close(_wakeupPipe[0]);
-    ::close(_wakeupPipe[1]);
-}
-
-void SocketServicePoll::process()
-{
-    while (true)
+    // Create worker threads
+    // If this throws we're depending on the destructor for cleanup
+    for (uint32 i = 0; i < desiredThreads; i++)
     {
-        Locker<Condition> locker(_cond);
+        AioWorker* worker = new AioWorker(this);
+        _threads.addBack(worker);
 
-        while (!_shutdown &&
-               _readyQueueHead == NULL)
-        {
-            _cond.wait();
-        }
-
-        if (_shutdown)
-            return;
-
-        // Pop an entry from the queue
-        QueueEntry* queueEntry = _readyQueueHead;
-        _readyQueueHead = queueEntry->next;
-
-        if (_readyQueueHead == NULL)
-        {
-            _readyQueueTail = NULL;
-        }
-        else
-        {
-            _readyQueueHead->prev = NULL;
-        }
-
-        locker.unlock();
-
-        // Take action depending on the data
-        SockData* sockData = queueEntry->data;
-        bool isRead = queueEntry->isRead;
-
-        Error error;
-        bool operComplete = false;
-
-        if (isRead)
-        {
-            if (sockData->readOper == FLAG_ACCEPT)
-            {
-                operComplete = handleAcceptReady(sockData, error);
-
-                if (operComplete)
-                {
-                    AioServer::acceptCallback callback = (AioServer::acceptCallback)sockData->readCallback;
-                    callback(sockData->aioSocket,
-                             sockData->acceptSocket,
-                             sockData->readUserData,
-                             error);
-                }
-            }
-            else if (sockData->readOper == FLAG_READ)
-            {
-                operComplete = handleReadReady(sockData, error);
-
-                if (operComplete)
-                {
-                    AioServer::socketCallback callback = (AioServer::socketCallback)sockData->readCallback;
-                    callback(sockData->aioSocket,
-                             sockData->readUserData,
-                             sockData->readBufferPos,
-                             error);
-                }
-            }
-        }
-        else
-        {
-
-        }
+        worker->start();
     }
 }
 
-void SocketServicePoll::shutdown()
+void SocketService::shutdown()
 {
-    _cond.lock();
-    _shutdown = true;
-    _cond.signalAll();
-    _cond.unlock();
+    // Signal shutdown
+    Locker<Condition> locker(_cond);
 
-    // TODO: Join worker
+    _isShutdown = true;
+
+    if (_threads.isEmpty())
+        return;
+
+    _cond.signalAll();
+
+    locker.unlock();
+
+    // Join and delete threads
+    size_t threadCount = _threads.size();
+    for (size_t i = 0; i < threadCount; i++)
+    {
+        AioWorker* worker = _threads.get(i);
+        worker->join();
+        delete worker;
+    }
+
+    _threads.clear();
 }
 
-void SocketServicePoll::submitAccept(AioSocket* listenSocket,
+void SocketService::socketAccept(AioSocket* listenSocket,
                                      AioSocket* acceptSocket,
-                                     AioServer::acceptCallback callback,
+                                     SocketService::acceptCallback callback,
                                      void* userData)
 {
     if (listenSocket->_sockFd != -1)
@@ -192,26 +157,11 @@ void SocketServicePoll::submitAccept(AioSocket* listenSocket,
     wakeup();
 }
 
-void SocketServicePoll::submitConnect(AioSocket* aioSocket,
-                                      AioServer::connectCallback callback,
+void SocketService::socketConnect(AioSocket* aioSocket,
+                                      SocketService::connectCallback callback,
                                       void* userData,
                                       const INetAddress& address,
                                       int32 port)
-{
-    submitConnect(aioSocket,
-                  callback,
-                  userData,
-                  address,
-                  port,
-                  0);
-}
-
-void SocketServicePoll::submitConnect(AioSocket* aioSocket,
-                                      AioServer::connectCallback callback,
-                                      void* userData,
-                                      const INetAddress& address,
-                                      int32 port,
-                                      int32 timeout)
 {
     Locker<Condition> locker(_cond);
 
@@ -254,11 +204,11 @@ void SocketServicePoll::submitConnect(AioSocket* aioSocket,
     wakeup();
 }
 
-void SocketServicePoll::socketRead(AioSocket* aioSocket,
-                                   AioServer::socketCallback callback,
-                                   void* userData,
-                                   char* buffer,
-                                   uint32 bufferLen)
+void SocketService::socketRead(AioSocket* aioSocket,
+                               SocketService::socketCallback callback,
+                               void* userData,
+                               char* buffer,
+                               uint32 bufferLen)
 {
     Locker<Condition> locker(_cond);
 
@@ -299,11 +249,11 @@ void SocketServicePoll::socketRead(AioSocket* aioSocket,
     wakeup();
 }
 
-void SocketServicePoll::socketWrite(AioSocket* aioSocket,
-                                    AioServer::socketCallback callback,
-                                    void* userData,
-                                    const char* buffer,
-                                    uint32 bufferLen)
+void SocketService::socketWrite(AioSocket* aioSocket,
+                                SocketService::socketCallback callback,
+                                void* userData,
+                                const char* buffer,
+                                uint32 bufferLen)
 {
     Locker<Condition> locker(_cond);
 
@@ -344,12 +294,12 @@ void SocketServicePoll::socketWrite(AioSocket* aioSocket,
     wakeup();
 }
 
-void SocketServicePoll::socketSendFile(AioSocket* aioSocket,
-                                       AioServer::socketCallback callback,
-                                       void* userData,
-                                       AioFile* aioFile,
-                                       uint64 pos,
-                                       uint32 writeLen)
+void SocketService::socketSendFile(AioSocket* aioSocket,
+                                   SocketService::socketCallback callback,
+                                   void* userData,
+                                   AioFile* aioFile,
+                                   uint64 pos,
+                                   uint32 writeLen)
 {
     Locker<Condition> locker(_cond);
 
@@ -400,7 +350,7 @@ void SocketServicePoll::socketSendFile(AioSocket* aioSocket,
     wakeup();
 }
 
-void SocketServicePoll::emptyWakePipe()
+void SocketService::emptyWakePipe()
 {
     char buffer[255];
     int res;
@@ -411,7 +361,7 @@ void SocketServicePoll::emptyWakePipe()
     } while (res == -1 && errno == EINTR);
 }
 
-void SocketServicePoll::wakeup()
+void SocketService::wakeup()
 {
     char data[1] = {'1'};
     int res;
@@ -422,12 +372,7 @@ void SocketServicePoll::wakeup()
     } while (res == -1 && errno == EINTR);
 }
 
-void* SocketServicePoll::pollFunc(void* threadData)
-{
-    SocketServicePoll* service = (SocketServicePoll*)threadData;
-}
-
-bool SocketServicePoll::handleAcceptReady(SockData* sockData, Error& error)
+bool SocketService::handleAcceptReady(SockData* sockData, Error& error)
 {
     INetProt_Enum family;
     sockaddr_in ipv4Address;
@@ -485,7 +430,7 @@ bool SocketServicePoll::handleAcceptReady(SockData* sockData, Error& error)
     return false;
 }
 
-bool SocketServicePoll::handleConnectReady(SockData* sockData, Error& error)
+bool SocketService::handleConnectReady(SockData* sockData, Error& error)
 {
     sockaddr_in ipv4SockAddr;
     sockaddr_in6 ipv6SockAddr;
@@ -554,7 +499,7 @@ bool SocketServicePoll::handleConnectReady(SockData* sockData, Error& error)
     return false;
 }
 
-bool SocketServicePoll::handleReadReady(SockData* sockData, Error& error)
+bool SocketService::handleReadReady(SockData* sockData, Error& error)
 {
     ssize_t res;
     int err;
@@ -597,19 +542,139 @@ bool SocketServicePoll::handleReadReady(SockData* sockData, Error& error)
     return false;
 }
 
-bool SocketServicePoll::handleWriteReady(SockData* sockData, Error& error)
+bool SocketService::handleWriteReady(SockData* sockData, Error& error)
 {
     return false;
 }
 
-bool SocketServicePoll::handleSendfileReady(SockData* sockData, Error& error)
+bool SocketService::handleSendfileReady(SockData* sockData, Error& error)
+{
+    return false;
+}
+
+void SocketService::dropSocket(AioSocket* aioSocket)
+{
+
+}
+
+bool SocketService::process()
+{
+    while (true)
+    {
+        Locker<Condition> locker(_cond);
+
+        while (!_isShutdown &&
+               _readyQueueHead == NULL)
+        {
+            _cond.wait();
+        }
+
+        if (_isShutdown)
+            return false;
+
+        // Pop an entry from the queue
+        QueueEntry* queueEntry = _readyQueueHead;
+        _readyQueueHead = queueEntry->next;
+
+        if (_readyQueueHead == NULL)
+        {
+            _readyQueueTail = NULL;
+        }
+        else
+        {
+            _readyQueueHead->prev = NULL;
+        }
+
+        locker.unlock();
+
+        // Take action depending on the data
+        SockData* sockData = queueEntry->data;
+        bool isRead = queueEntry->isRead;
+
+        Error error;
+        bool operComplete = false;
+
+        if (isRead)
+        {
+            if (sockData->readOper == FLAG_ACCEPT)
+            {
+                operComplete = handleAcceptReady(sockData, error);
+
+                if (operComplete)
+                {
+                    SocketService::acceptCallback callback = (SocketService::acceptCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->acceptSocket,
+                             sockData->readUserData,
+                             error);
+                }
+            }
+            else if (sockData->readOper == FLAG_READ)
+            {
+                operComplete = handleReadReady(sockData, error);
+
+                if (operComplete)
+                {
+                    SocketService::socketCallback callback = (SocketService::socketCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->readUserData,
+                             sockData->readBufferPos,
+                             error);
+                }
+            }
+        }
+        else
+        {
+
+        }
+    }
+
+    return true;
+}
+
+bool SocketService::poll()
 {
     return false;
 }
 
 // Inner Classes ------------------------------------------------------------
 
-SocketServicePoll::SockData::SockData() :
+SocketService::AioWorker::AioWorker(SocketService* socketService) :
+    _socketService(socketService)
+{
+}
+
+void SocketService::AioWorker::run()
+{
+    CurrentThread::setName("SocketService Worker");
+
+    bool keepGoing = true;
+
+    while (keepGoing)
+    {
+        keepGoing = _socketService->process();
+    }
+}
+
+SocketService::PollWorker::PollWorker(SocketService* socketService) :
+    _socketService(socketService)
+{
+
+}
+
+void SocketService::PollWorker::run()
+{
+    CurrentThread::setName("FileService Poll Worker");
+
+    bool keepGoing = true;
+
+    while (keepGoing)
+    {
+        keepGoing = _socketService->poll();
+    }
+}
+
+SocketService::SockData::SockData() :
     aioSocket(NULL),
     operMask(0),
     readOper(0),
@@ -643,7 +708,7 @@ SocketServicePoll::SockData::SockData() :
     writeQueueEntry.next = NULL;
 }
 
-SocketServicePoll::SockData::~SockData()
+SocketService::SockData::~SockData()
 {
     delete[] sendFileBuf;
 }

@@ -5,19 +5,18 @@
 
 #include <ge/common.h>
 #include <ge/Error.h>
+#include <ge/aio/FileService.h>
 #include <ge/io/IO.h>
 #include <ge/text/StringRef.h>
 
-class AioServer;
+class FileService;
 
 /*
  * Represents a file opened for asynchronous IO.
  */
 class AioFile
 {
-    friend class AioServer;
-    friend class FileServiceBlocking;
-    friend class FileServiceLinuxAio;
+    friend class FileService;
 
 public:
     AioFile();
@@ -31,7 +30,7 @@ private:
     AioFile& operator=(const AioFile& other) DELETED;
 
     int _fd;
-    AioServer* _owner;
+    FileService* _owner;
 };
 
 #endif // AIO_FILE_H

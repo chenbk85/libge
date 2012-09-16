@@ -1,6 +1,6 @@
-// AioServer.cpp
+// SocketService.cpp
 
-#include "ge/aio/AioServer.h"
+#include "ge/aio/SocketService.h"
 
 #include "ge/io/IOException.h"
 #include "ge/thread/CurrentThread.h"
@@ -67,12 +67,10 @@ GUID disconnectExGUID = WSAID_DISCONNECTEX;
 GUID transmitFileGUID = WSAID_TRANSMITFILE;
 
 // Global for assigning ids to servers
-LONG volatile g_nextServerId;
+static LONG volatile g_nextServerId;
 
 enum Overlapped_Op
 {
-    OP_READ_FILE,
-    OP_WRITE_FILE,
     OP_ACCEPT,
     OP_CONNECT,
     OP_DISCONNECT,
@@ -100,7 +98,6 @@ struct OVERLAPPED_EX
     void*             callback;
     void*             userData;
 
-    // TODO: Anonymous union
     // Accept only fields
     AioSocket*        acceptedSocket;
     char              addressBuffer[ACCEPTEX_ADDRESS_SIZE * 2];
@@ -197,7 +194,7 @@ Error handleAcceptSuccess(OVERLAPPED_EX* overlappedEx,
     {
         return WinUtil::getError(::WSAGetLastError(),
             "setsockopt",
-            "AioServer::socketConnect");
+            "SocketService::socketConnect");
     }
 
     return Error();
@@ -222,7 +219,7 @@ Error handleConnectSuccess(OVERLAPPED_EX* overlappedEx,
     {
         return WinUtil::getError(::WSAGetLastError(),
             "setsockopt",
-            "AioServer::socketConnect");
+            "SocketService::socketConnect");
     }
 
     // TODO: Fill in local/peer address info or somehow mark as connected
@@ -231,55 +228,19 @@ Error handleConnectSuccess(OVERLAPPED_EX* overlappedEx,
     return Error();
 }
 
-/*
- * Worker thread that calls the owner's process() method until it returns
- * false.
- */
-class AioWorker : public Thread
-{
-public:
-    AioWorker(AioServer* aioServer) :
-        _aioServer(aioServer)
-    {
-    }
-
-    void run() OVERRIDE
-    {
-        CurrentThread::setName("AioWorker");
-
-        bool keepGoing;
-
-        do
-        {
-            keepGoing = _aioServer->process();
-        }
-        while (keepGoing);
-    }
-
-private:
-    AioServer* _aioServer;
-};
-
-AioServer::AioServer() :
+SocketService::SocketService() :
     _completionPort(NULL),
     _state(STATE_NONE),
     _pending(0)
 {
 }
 
-AioServer::~AioServer()
+SocketService::~SocketService()
 {
-    try
-    {
-        shutdown();
-    }
-    catch (...)
-    {
-        // TODO: log
-    }
+    shutdown();
 }
 
-void AioServer::startServing(uint32 desiredThreads)
+void SocketService::startServing(uint32 desiredThreads)
 {
     LONG oldState = ::InterlockedCompareExchange(&_state, STATE_STARTED, STATE_NONE);
 
@@ -297,14 +258,14 @@ void AioServer::startServing(uint32 desiredThreads)
 
     if (_completionPort == NULL)
     {
-        Error error = WinUtil::getError(::GetLastError(),
+        Error err = WinUtil::getError(::GetLastError(),
             "CreateIoCompletionPort",
-            "AioServer::startServing");
-        throw IOException(error);
+            "SocketService::startServing");
+        throw IOException(err);
     }
 
     // Create worker threads
-    // If this throws we're depending on the destructor for cleanup
+
     for (uint32 i = 0; i < desiredThreads; i++)
     {
         AioWorker* worker = new AioWorker(this);
@@ -312,11 +273,9 @@ void AioServer::startServing(uint32 desiredThreads)
 
         worker->start();
     }
-
-    return Error();
 }
 
-void AioServer::shutdown()
+void SocketService::shutdown()
 {
     LONG oldState = ::InterlockedExchange(&_state, STATE_SHUTDOWN);
 
@@ -356,7 +315,7 @@ void AioServer::shutdown()
         {
             Error err = WinUtil::getError(::GetLastError(),
                 "PostQueuedCompletionStatus",
-                "AioServer::fileRead");
+                "SocketService::shutdown");
 
             throw IOException(err);
         }
@@ -404,7 +363,7 @@ void AioServer::shutdown()
             {
                 Error err = WinUtil::getError(winErr,
                     "GetQueuedCompletionStatus",
-                    "AioServer::shutdown");
+                    "SocketService::shutdown");
 
                 // TODO: Log
             }
@@ -418,207 +377,10 @@ void AioServer::shutdown()
     _completionPort = NULL;
 }
 
-void AioServer::fileRead(AioFile* aioFile,
-                         fileCallback callback,
-                         void* userData,
-                         uint64 pos,
-                         char* buffer,
-                         uint32 bufferLen)
-{
-    if (aioFile->_handle == INVALID_HANDLE_VALUE)
-    {
-        throw IOException("Cannot read from closed file");
-    }
-
-    if (_state != STATE_STARTED)
-    {
-        throw IOException("AioServer not running");
-    }
-
-    // Associate the file with this server if have not already done so
-    if (aioFile->_owner == NULL)
-    {
-        Error err = addFile(aioFile, "fileRead");
-
-        if (err.isSet())
-            throw IOException(err);
-    }
-    else if (aioFile->_owner != this)
-    {
-        throw IOException("Called AioServer::fileRead call with AioSocket "
-            "owned by another AioServer");
-    }
-
-    // Create an OVERLAPPED_EX with data for ReadFile
-    OVERLAPPED_EX* overlappedEx = new OVERLAPPED_EX();
-
-    overlappedEx->overlapped.hEvent = ::CreateEventW(NULL, FALSE, FALSE, NULL);
-    overlappedEx->overlapped.OffsetHigh = (uint32)(pos >> 32);
-    overlappedEx->overlapped.Offset = (uint32)pos;
-    overlappedEx->opCode = OP_READ_FILE;
-    overlappedEx->callback = callback;
-    overlappedEx->aioFile = aioFile;
-    overlappedEx->buffer = buffer;
-    overlappedEx->bufferSize = bufferLen;
-    overlappedEx->userData = userData;
-
-    ::InterlockedIncrement(&_pending);
-
-    // Add to the completion queue
-    BOOL res = ::PostQueuedCompletionStatus(_completionPort,
-        0,
-        COMPLETION_KEY_SERVER,
-        &overlappedEx->overlapped);
-
-    if (!res)
-    {
-        delete overlappedEx;
-        ::InterlockedDecrement(&_pending);
-
-        Error err = WinUtil::getError(::GetLastError(),
-            "PostQueuedCompletionStatus",
-            "AioServer::fileRead");
-
-        throw IOException(err);
-    }
-}
-
-void AioServer::fileWrite(AioFile* aioFile,
-                           fileCallback callback,
-                           void* userData,
-                           uint64 pos,
-                           const char* buffer,
-                           uint32 bufferLen)
-{
-    if (aioFile->_handle == INVALID_HANDLE_VALUE)
-    {
-        throw IOException("Cannot write to closed file");
-    }
-
-    if (_state != STATE_STARTED)
-    {
-        throw IOException("AioServer not running");
-    }
-
-    // Associate the file with this server if have not already done so
-    if (aioFile->_owner == NULL)
-    {
-        Error err = addFile(aioFile, "fileWrite");
-
-        if (err.isSet())
-            throw IOException(err);
-    }
-    else if (aioFile->_owner != this)
-    {
-        throw IOException("Called AioServer::fileWrite call with AioSocket "
-            "owned by another AioServer");
-    }
-
-    // Create an OVERLAPPED_EX with data for WriteFile
-    OVERLAPPED_EX* overlappedEx = new OVERLAPPED_EX();
-
-    overlappedEx->overlapped.hEvent = ::CreateEventW(NULL, FALSE, FALSE, NULL);
-    overlappedEx->overlapped.OffsetHigh = (uint32)(pos >> 32);
-    overlappedEx->overlapped.Offset = (uint32)pos;
-    overlappedEx->callback = callback;
-    overlappedEx->opCode = OP_WRITE_FILE;
-    overlappedEx->aioFile = aioFile;
-    overlappedEx->buffer = (char*)buffer;
-    overlappedEx->bufferSize = bufferLen;
-    overlappedEx->userData = userData;
-
-    ::InterlockedIncrement(&_pending);
-
-    // Add to the completion queue
-    BOOL res = ::PostQueuedCompletionStatus(_completionPort,
-        0,
-        COMPLETION_KEY_SERVER,
-        &overlappedEx->overlapped);
-
-    if (!res)
-    {
-        delete overlappedEx;
-        ::InterlockedDecrement(&_pending);
-
-        Error err = WinUtil::getError(::GetLastError(),
-            "PostQueuedCompletionStatus",
-            "AioServer::fileWrite");
-
-        throw IOException(err);
-    }
-}
-
-void AioServer::socketClose(AioSocket* aioSocket,
-                            connectCallback callback,
-                            void* userData)
-{
-    int err = 0;
-
-    if (aioSocket->_winSocket == INVALID_SOCKET)
-    {
-        throw IOException("Cannot close on uninitialized or closed socket");
-    }
-
-    if (_state != STATE_STARTED)
-    {
-        throw IOException("AioServer not running");
-    }
-
-    // Get the DisconnectEx extension if needed
-    if (disconnectExPtr == NULL)
-    {
-        disconnectExPtr = (LPFN_DISCONNECTEX)
-            getExtension(aioSocket->_winSocket,
-                         &disconnectExGUID,
-                         "WSAID_DISCONNECTEX");
-    }
-
-    // Validate the socket
-    if (aioSocket->_owner == NULL)
-    {
-        throw IOException("Called AioServer::socketClose call with "
-            "AioSocket that is not connected");
-    }
-    else if (aioSocket->_owner != this)
-    {
-        throw IOException("Called AioServer::socketClose call with "
-            "AioSocket owned by another AioServer");
-    }
-
-    // Create an OVERLAPPED_EX with data for DisconnectEx
-    OVERLAPPED_EX* overlappedEx = new OVERLAPPED_EX();
-
-    overlappedEx->overlapped.hEvent = ::CreateEventW(NULL, FALSE, FALSE, NULL);
-    overlappedEx->opCode = OP_DISCONNECT;
-    overlappedEx->callback = callback;
-    overlappedEx->aioSocket = aioSocket;
-    overlappedEx->userData = userData;
-
-    ::InterlockedIncrement(&_pending);
-
-    // Add to the completion queue
-    BOOL res = ::PostQueuedCompletionStatus(_completionPort,
-        0,
-        COMPLETION_KEY_SERVER,
-        &overlappedEx->overlapped);
-
-    if (!res)
-    {
-        delete overlappedEx;
-        ::InterlockedDecrement(&_pending);
-
-        Error err = WinUtil::getError(::WSAGetLastError(),
-            "PostQueuedCompletionStatus",
-            "AioServer::socketClose");
-
-        throw IOException(err);
-    }
-}
-
-void AioServer::socketAccept(AioSocket* listenSocket,
-                             AioSocket* acceptingSocket,
-                             acceptCallback callback,
-                             void* userData)
+void SocketService::socketAccept(AioSocket* listenSocket,
+                                 AioSocket* acceptingSocket,
+                                 acceptCallback callback,
+                                 void* userData)
 {
     int err = 0;
 
@@ -660,7 +422,7 @@ void AioServer::socketAccept(AioSocket* listenSocket,
     }
     else if (listenSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketAccept call with "
+        throw IOException("Called SocketService::socketAccept call with "
             "AioSocket owned by another AioServer");
     }
 
@@ -680,7 +442,7 @@ void AioServer::socketAccept(AioSocket* listenSocket,
     }
     else if (acceptingSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketAccept call with "
+        throw IOException("Called SocketService::socketAccept call with "
             "AioSocket owned by another AioServer");
     }
 
@@ -709,32 +471,17 @@ void AioServer::socketAccept(AioSocket* listenSocket,
 
         Error err = WinUtil::getError(::WSAGetLastError(),
             "PostQueuedCompletionStatus",
-            "AioServer::socketAccept");
+            "SocketService::socketAccept");
 
         throw IOException(err);
     }
 }
 
-void AioServer::socketConnect(AioSocket* aioSocket,
-                              connectCallback callback,
-                              void* userData,
-                              const INetAddress& address,
-                              int32 port)
-{
-    socketConnect(aioSocket,
-                  callback,
-                  userData,
-                  address,
-                  port,
-                  0);
-}
-
-void AioServer::socketConnect(AioSocket* aioSocket,
-                              connectCallback callback,
-                              void* userData,
-                              const INetAddress& address,
-                              int32 port,
-                              int32 timeout)
+void SocketService::socketConnect(AioSocket* aioSocket,
+                                  connectCallback callback,
+                                  void* userData,
+                                  const INetAddress& address,
+                                  int32 port)
 {
     if (_state != STATE_STARTED)
     {
@@ -766,7 +513,7 @@ void AioServer::socketConnect(AioSocket* aioSocket,
     }
     else if (aioSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketConnect call with "
+        throw IOException("Called SocketService::socketConnect call with "
             "AioSocket owned by another AioServer");
     }
 
@@ -800,17 +547,17 @@ void AioServer::socketConnect(AioSocket* aioSocket,
 
         Error err = WinUtil::getError(::WSAGetLastError(),
             "PostQueuedCompletionStatus",
-            "AioServer::socketConnect");
+            "SocketService::socketConnect");
 
         throw IOException(err);
     }
 }
 
-void AioServer::socketRead(AioSocket* aioSocket,
-                           socketCallback callback,
-                           void* userData,
-                           char* buffer,
-                           uint32 bufferLen)
+void SocketService::socketRead(AioSocket* aioSocket,
+                               socketCallback callback,
+                               void* userData,
+                               char* buffer,
+                               uint32 bufferLen)
 {
     int err = 0;
 
@@ -835,7 +582,7 @@ void AioServer::socketRead(AioSocket* aioSocket,
     }
     else if (aioSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketRead call with "
+        throw IOException("Called SocketService::socketRead call with "
             "AioSocket owned by another AioServer");
     }
 
@@ -865,17 +612,17 @@ void AioServer::socketRead(AioSocket* aioSocket,
 
         Error err = WinUtil::getError(::WSAGetLastError(),
             "PostQueuedCompletionStatus",
-            "AioServer::socketRead");
+            "SocketService::socketRead");
 
         throw IOException(err);
     }
 }
 
-void AioServer::socketWrite(AioSocket* aioSocket,
-                            socketCallback callback,
-                            void* userData,
-                            const char* buffer,
-                            uint32 bufferLen)
+void SocketService::socketWrite(AioSocket* aioSocket,
+                                socketCallback callback,
+                                void* userData,
+                                const char* buffer,
+                                uint32 bufferLen)
 {
     int err = 0;
 
@@ -900,7 +647,7 @@ void AioServer::socketWrite(AioSocket* aioSocket,
     }
     else if (aioSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketWrite call with "
+        throw IOException("Called SocketService::socketWrite call with "
             "AioSocket owned by another AioServer");
     }
 
@@ -930,18 +677,18 @@ void AioServer::socketWrite(AioSocket* aioSocket,
 
         Error err = WinUtil::getError(::WSAGetLastError(),
             "PostQueuedCompletionStatus",
-            "AioServer::socketWrite");
+            "SocketService::socketWrite");
 
         throw IOException(err);
     }
 }
 
-void AioServer::socketSendFile(AioSocket* aioSocket,
-                               socketCallback callback,
-                               void* userData,
-                               AioFile* aioFile,
-                               uint64 pos,
-                               uint32 len)
+void SocketService::socketSendFile(AioSocket* aioSocket,
+                                   socketCallback callback,
+                                   void* userData,
+                                   AioFile* aioFile,
+                                   uint64 pos,
+                                   uint32 len)
 {
     if (_state != STATE_STARTED)
     {
@@ -978,10 +725,12 @@ void AioServer::socketSendFile(AioSocket* aioSocket,
     }
     else if (aioSocket->_owner != this)
     {
-        throw IOException("Called AioServer::socketSendFile call with "
+        throw IOException("Called SocketService::socketSendFile call with "
             "AioSocket owned by another AioServer");
     }
 
+    // Don't associate
+    /*
     if (aioFile->_owner == NULL)
     {
         Error err = addFile(aioFile, "socketConnect");
@@ -991,9 +740,10 @@ void AioServer::socketSendFile(AioSocket* aioSocket,
     }
     else if (aioFile->_owner != this)
     {
-        throw IOException("Called AioServer::socketSendFile call with "
+        throw IOException("Called SocketService::socketSendFile call with "
             "AioFile owned by another AioServer");
     }
+    */
 
     // Create an OVERLAPPED_EX with data for TransmitFile
     OVERLAPPED_EX* overlappedEx = new OVERLAPPED_EX();
@@ -1023,40 +773,13 @@ void AioServer::socketSendFile(AioSocket* aioSocket,
 
         Error err = WinUtil::getError(::WSAGetLastError(),
             "PostQueuedCompletionStatus",
-            "AioServer::socketSendFile");
+            "SocketService::socketSendFile");
 
         throw IOException(err);
     }
 }
 
-Error AioServer::addFile(AioFile* aioFile,
-                         const char* context)
-{
-    // Add the file to the completion port
-    HANDLE res = ::CreateIoCompletionPort(aioFile->_handle, 
-                                          _completionPort,
-                                          (ULONG_PTR)NULL,
-                                          0);
-
-    if (res == NULL)
-    {
-        return WinUtil::getError(::GetLastError(),
-                                 "CreateIoCompletionPort",
-                                 context);
-    }
-
-    // Mark this server as the owner
-    aioFile->_owner = this;
-
-    // Add to the set of files
-    _lock.lock();
-    _files.addBack(aioFile);
-    _lock.unlock();
-
-    return Error();
-}
-
-Error AioServer::addSocket(AioSocket* aioSocket,
+Error SocketService::addSocket(AioSocket* aioSocket,
                            const char* context)
 {
     // Add the socket to the completion port
@@ -1083,29 +806,8 @@ Error AioServer::addSocket(AioSocket* aioSocket,
     return Error();
 }
 
-void AioServer::dropFile(AioFile* aioFile)
+void SocketService::dropSocket(AioSocket* aioSocket)
 {
-    lock.lock();
-
-    size_t fileCount = _files.size();
-    for (size_t i = 0; i < fileCount; i++)
-    {
-        AioFile* file = _files.get(i);
-
-        if (file == aioFile)
-        {
-            _files.remove(i);
-            return;
-        }
-    }
-
-    lock.unlock();
-}
-
-void AioServer::dropSocket(AioSocket* aioSocket)
-{
-    lock.lock();
-
     size_t socketCount = _sockets.size();
     for (size_t i = 0; i < socketCount; i++)
     {
@@ -1117,21 +819,18 @@ void AioServer::dropSocket(AioSocket* aioSocket)
             return;
         }
     }
-
-    lock.unlock();
 }
 
-bool AioServer::process()
+bool SocketService::process()
 {
     OVERLAPPED_EX* overlappedEx = NULL;
     DWORD bytesTransfered = 0;
     ULONG_PTR completionKey;
     uint32 completionValue;
 
-    AioServer::fileCallback userFileCallback = NULL;
-    AioServer::socketCallback userSocketCallback = NULL;
-    AioServer::acceptCallback userAcceptCallback = NULL;
-    AioServer::connectCallback userConnectCallback = NULL;
+    SocketService::socketCallback userSocketCallback = NULL;
+    SocketService::acceptCallback userAcceptCallback = NULL;
+    SocketService::connectCallback userConnectCallback = NULL;
 
     WSABUF wsabuf;
     DWORD flags = 0;
@@ -1170,7 +869,7 @@ bool AioServer::process()
 
             error = WinUtil::getError(winErr,
                 "GetQueuedCompletionStatus",
-                "AioServer::process");
+                "SocketService::process");
 
             return false;
         }
@@ -1184,18 +883,6 @@ bool AioServer::process()
     if (overlappedEx->opCode == OP_SHUTDOWN)
     {
         _lock.lock();
-
-        size_t filesSize = _files.size();
-        for (size_t i = 0; i < filesSize; i++)
-        {
-            AioFile* aioFile = _files.get(i);
-            bRet = ::CancelIo(aioFile->_handle);
-
-            if (!bRet)
-            {
-                // TODO: Log?
-            }
-        }
 
         size_t socketsSize = _sockets.size();
         for (size_t i = 0; i < socketsSize; i++)
@@ -1225,71 +912,6 @@ bool AioServer::process()
     {
         switch (overlappedEx->opCode)
         {
-            case OP_READ_FILE:
-                bRet = ::ReadFile(overlappedEx->aioFile->_handle,
-                                  overlappedEx->buffer,
-                                  overlappedEx->bufferSize,
-                                  &bytesTransfered,
-                                  &overlappedEx->overlapped);
-
-                // TRUE indicates immediate success, FALSE means failure or queued.
-                if (bRet != TRUE)
-                {
-                    winErr = ::GetLastError();
-
-                    // The ERROR_HANDLE_EOF just means we hit end of file and
-                    // read nothing
-                    if (winErr != ERROR_IO_PENDING &&
-                        winErr != ERROR_HANDLE_EOF)
-                    {
-                        error = WinUtil::getError(winErr,
-                            "ReadFile",
-                            "AioServer::fileRead");
-                    }
-                }
-
-                // Trigger callback if completed immediately or failed
-                if (!completionQueued(winErr))
-                {
-                    userFileCallback = (AioServer::fileCallback)overlappedEx->callback;
-                    userFileCallback(overlappedEx->aioFile,
-                                     overlappedEx->userData,
-                                     bytesTransfered,
-                                     error);
-                }
-
-                break;
-            case OP_WRITE_FILE:
-                bRet = ::WriteFile(overlappedEx->aioFile->_handle,
-                                   overlappedEx->buffer,
-                                   overlappedEx->bufferSize,
-                                   &bytesTransfered,
-                                   &overlappedEx->overlapped);
-
-                // TRUE indicates immediate success, FALSE means failure or queued.
-                if (bRet != TRUE)
-                {
-                    winErr = ::GetLastError();
-
-                    if (winErr != ERROR_IO_PENDING)
-                    {
-                        error = WinUtil::getError(winErr,
-                            "WriteFile",
-                            "AioServer::fileWrite");
-                    }
-                }
-
-                // Trigger callback if completed immediately or failed
-                if (!completionQueued(winErr))
-                {
-                    userFileCallback = (AioServer::fileCallback)overlappedEx->callback;
-                    userFileCallback(overlappedEx->aioFile,
-                                     overlappedEx->userData,
-                                     bytesTransfered,
-                                     error);
-                }
-
-                break;
             case OP_ACCEPT:
                 // Call AcceptEx
                 bRet = acceptExPtr(overlappedEx->aioSocket->_winSocket, // Listen socket
@@ -1319,14 +941,14 @@ bool AioServer::process()
                     {
                         error = WinUtil::getError(winErr,
                             "AcceptEx",
-                            "AioServer::socketAccept");
+                            "SocketService::socketAccept");
                     }
                 }
 
                 // Trigger callback if completed immediately or failed
                 if (!completionQueued(winErr))
                 {
-                    userAcceptCallback = (AioServer::acceptCallback)overlappedEx->callback;
+                    userAcceptCallback = (SocketService::acceptCallback)overlappedEx->callback;
                     userAcceptCallback(overlappedEx->aioSocket,
                                        overlappedEx->acceptedSocket,
                                        overlappedEx->userData,
@@ -1382,43 +1004,14 @@ bool AioServer::process()
                     {
                         error = WinUtil::getError(winErr,
                             "ConnectEx",
-                            "AioServer::socketConnect");
+                            "SocketService::socketConnect");
                     }
                 }
 
                 // Trigger callback if completed immediately or failed
                 if (!completionQueued(winErr))
                 {
-                    userConnectCallback = (AioServer::connectCallback)overlappedEx->callback;
-                    userConnectCallback(overlappedEx->aioSocket,
-                                        overlappedEx->userData,
-                                        error);
-                }
-
-                break;
-            case OP_DISCONNECT:
-                bRet = disconnectExPtr(overlappedEx->aioSocket->_winSocket, // Socket
-                                       &overlappedEx->overlapped, // Overlapped
-                                       TF_REUSE_SOCKET, // Flags (not allowing reuse) // TEST
-                                       0); // Reserved
-
-                // TRUE indicates immediate success, FALSE means failure or queued.
-                if (bRet != TRUE)
-                {
-                    winErr = ::GetLastError();
-
-                    if (winErr != ERROR_IO_PENDING)
-                    {
-                        error = WinUtil::getError(winErr,
-                            "DisconnectEx",
-                            "AioServer::socketClose");
-                    }
-                }
-
-                // Trigger callback if completed immediately or failed
-                if (!completionQueued(winErr))
-                {
-                    userConnectCallback = (AioServer::connectCallback)overlappedEx->callback;
+                    userConnectCallback = (SocketService::connectCallback)overlappedEx->callback;
                     userConnectCallback(overlappedEx->aioSocket,
                                         overlappedEx->userData,
                                         error);
@@ -1452,18 +1045,18 @@ bool AioServer::process()
                         // Trigger the callback
                         error = WinUtil::getError(winErr,
                             "TransmitFile",
-                            "AioServer::socketSendFile");
+                            "SocketService::socketSendFile");
                     }
                 }
 
                 // Trigger callback if completed immediately or failed
                 if (!completionQueued(winErr))
                 {
-                    userFileCallback = (AioServer::fileCallback)overlappedEx->callback;
-                    userFileCallback(overlappedEx->aioFile,
-                                     overlappedEx->userData,
-                                     overlappedEx->bufferSize,
-                                     error);
+                    userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
+                    userSocketCallback(overlappedEx->aioSocket,
+                                       overlappedEx->userData,
+                                       overlappedEx->bufferSize,
+                                       error);
                 }
 
                 break;
@@ -1492,14 +1085,14 @@ bool AioServer::process()
                     {
                         error = WinUtil::getError(winErr,
                             "WSARecv",
-                            "AioServer::socketRead");
+                            "SocketService::socketRead");
                     }
                 }
 
                 // Trigger callback if completed immediately or failed
                 if (!completionQueued(winErr))
                 {
-                    userSocketCallback = (AioServer::socketCallback)overlappedEx->callback;
+                    userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
                     userSocketCallback(overlappedEx->aioSocket,
                                        overlappedEx->userData,
                                        bytesTransfered,
@@ -1531,14 +1124,14 @@ bool AioServer::process()
                     {
                         error = WinUtil::getError(winErr,
                             "WSASend",
-                            "AioServer::socketWrite");
+                            "SocketService::socketWrite");
                     }
                 }
 
                 // Trigger callback if completed immediately or failed
                 if (!completionQueued(winErr))
                 {
-                    userSocketCallback = (AioServer::socketCallback)overlappedEx->callback;
+                    userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
                     userSocketCallback(overlappedEx->aioSocket,
                                        overlappedEx->userData,
                                        bytesTransfered,
@@ -1554,36 +1147,6 @@ bool AioServer::process()
         // failed with an error, winErr will be non-zero.
         switch (overlappedEx->opCode)
         {
-            case OP_READ_FILE:
-                // The ERROR_HANDLE_EOF just means we hit end of file
-                if (winErr != ERROR_SUCCESS &&
-                    winErr != ERROR_HANDLE_EOF)
-                {
-                    error = WinUtil::getError(winErr,
-                            "ReadFile",
-                            "AioServer::fileRead");
-                }
-
-                userFileCallback = (AioServer::fileCallback)overlappedEx->callback;
-                userFileCallback(overlappedEx->aioFile,
-                                    overlappedEx->userData,
-                                    0,
-                                    error);
-
-            case OP_WRITE_FILE:
-                if (winErr != ERROR_SUCCESS)
-                {
-                    error = WinUtil::getError(winErr,
-                            "WriteFile",
-                            "AioServer::fileWrite");
-                }
-
-                userFileCallback = (AioServer::fileCallback)overlappedEx->callback;
-                userFileCallback(overlappedEx->aioFile,
-                                 overlappedEx->userData,
-                                 bytesTransfered,
-                                 error);
-                break;
             case OP_ACCEPT:
                 if (winErr == ERROR_SUCCESS)
                 {
@@ -1596,10 +1159,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "AcceptEx",
-                            "AioServer::socketAccept");
+                            "SocketService::socketAccept");
                 }
 
-                userAcceptCallback = (AioServer::acceptCallback)overlappedEx->callback;
+                userAcceptCallback = (SocketService::acceptCallback)overlappedEx->callback;
                 userAcceptCallback(overlappedEx->aioSocket,
                                    overlappedEx->acceptedSocket,
                                    overlappedEx->userData,
@@ -1617,10 +1180,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "ConnectEx",
-                            "AioServer::socketConnect");
+                            "SocketService::socketConnect");
                 }
 
-                userConnectCallback = (AioServer::connectCallback)overlappedEx->callback;
+                userConnectCallback = (SocketService::connectCallback)overlappedEx->callback;
                 userConnectCallback(overlappedEx->aioSocket,
                                     overlappedEx->userData,
                                     error);
@@ -1630,10 +1193,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "DisconnectEx",
-                            "AioServer::socketClose");
+                            "SocketService::socketClose");
                 }
 
-                userConnectCallback = (AioServer::connectCallback)overlappedEx->callback;
+                userConnectCallback = (SocketService::connectCallback)overlappedEx->callback;
                 userConnectCallback(overlappedEx->aioSocket,
                                     overlappedEx->userData,
                                     error);
@@ -1643,10 +1206,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "TransmitFile",
-                            "AioServer::socketSendFile");
+                            "SocketService::socketSendFile");
                 }
 
-                userSocketCallback = (AioServer::socketCallback)overlappedEx->callback;
+                userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
                 userSocketCallback(overlappedEx->aioSocket,
                                    overlappedEx->userData,
                                    bytesTransfered,
@@ -1658,10 +1221,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "WSARecv",
-                            "AioServer::socketRead");
+                            "SocketService::socketRead");
                 }
 
-                userSocketCallback = (AioServer::socketCallback)overlappedEx->callback;
+                userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
                 userSocketCallback(overlappedEx->aioSocket,
                                    overlappedEx->userData,
                                    bytesTransfered,
@@ -1673,10 +1236,10 @@ bool AioServer::process()
                 {
                     error = WinUtil::getError(winErr,
                             "WSASend",
-                            "AioServer::socketWrite");
+                            "SocketService::socketWrite");
                 }
 
-                userSocketCallback = (AioServer::socketCallback)overlappedEx->callback;
+                userSocketCallback = (SocketService::socketCallback)overlappedEx->callback;
                 userSocketCallback(overlappedEx->aioSocket,
                                    overlappedEx->userData,
                                    bytesTransfered,
@@ -1690,4 +1253,23 @@ bool AioServer::process()
     }
 
     return true;
+}
+
+// Inner Classes ------------------------------------------------------------
+
+SocketService::AioWorker::AioWorker(SocketService* socketService) :
+    _socketService(socketService)
+{
+}
+
+void SocketService::AioWorker::run()
+{
+    CurrentThread::setName("SocketService Worker");
+
+    bool keepGoing = true;
+
+    while (keepGoing)
+    {
+        keepGoing = _socketService->process();
+    }
 }

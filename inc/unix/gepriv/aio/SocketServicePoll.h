@@ -3,70 +3,101 @@
 #ifndef SOCKET_SERVICE_POLL_H
 #define SOCKET_SERVICE_POLL_H
 
-#include <ge/aio/AioServer.h>
+#include <ge/Error.h>
+#include <ge/aio/AioFile.h>
+#include <ge/aio/AioSocket.h>
 #include <ge/data/HashMap.h>
 #include <ge/data/List.h>
+#include <ge/inet/INetAddress.h>
 #include <ge/thread/Condition.h>
-#include <gepriv/aio/SocketService.h>
+#include <ge/thread/Thread.h>
 
 #include <poll.h>
+
+class AioFile;
+class AioSocket;
 
 /*
  * SocketService implementation that uses the poll() system call.
  */
-class SocketServicePoll : public SocketService
+class SocketService
 {
 public:
-    SocketServicePoll(AioServer* aioServer);
-    ~SocketServicePoll();
+    friend class AioSocket;
+    friend class AioWorker;
+    friend class PollWorker;
 
-    /*
-     * Calls read(), write() on ready sockets and triggers callbacks.
-     */
-    void process() OVERRIDE;
+    typedef void (*socketCallback)(AioSocket* aioSocket,
+                                   void* userData,
+                                   uint32 bytesTransfered,
+                                   const Error& error);
+    typedef void (*acceptCallback)(AioSocket* aioSocket,
+                                   AioSocket* acceptedSocket,
+                                   void* userData,
+                                   const Error& error);
+    typedef void (*connectCallback)(AioSocket* aioSocket,
+                                    void* userData,
+                                    const Error& error);
 
-    void shutdown() OVERRIDE;
+    SocketService();
+    ~SocketService();
 
-    void submitAccept(AioSocket* listenSocket,
+    void startServing(uint32 desiredThreads);
+    void shutdown();
+
+    void socketAccept(AioSocket* listenSocket,
                       AioSocket* acceptSocket,
-                      AioServer::acceptCallback callback,
-                      void* userData) OVERRIDE;
+                      SocketService::acceptCallback callback,
+                      void* userData);
 
-    void submitConnect(AioSocket* aioSocket,
-                       AioServer::connectCallback callback,
+    void socketConnect(AioSocket* aioSocket,
+                       SocketService::connectCallback callback,
                        void* userData,
                        const INetAddress& address,
-                       int32 port) OVERRIDE;
-
-    void submitConnect(AioSocket* aioSocket,
-                       AioServer::connectCallback callback,
-                       void* userData,
-                       const INetAddress& address,
-                       int32 port,
-                       int32 timeout) OVERRIDE;
+                       int32 port);
 
     void socketRead(AioSocket* aioSocket,
-                    AioServer::socketCallback callback,
+                    SocketService::socketCallback callback,
                     void* userData,
                     char* buffer,
-                    uint32 bufferLen) OVERRIDE;
+                    uint32 bufferLen);
 
     void socketWrite(AioSocket* aioSocket,
-                     AioServer::socketCallback callback,
+                     SocketService::socketCallback callback,
                      void* userData,
                      const char* buffer,
-                     uint32 bufferLen) OVERRIDE;
+                     uint32 bufferLen);
 
     void socketSendFile(AioSocket* aioSocket,
-                        AioServer::socketCallback callback,
+                        SocketService::socketCallback callback,
                         void* userData,
                         AioFile* aioFile,
                         uint64 pos,
-                        uint32 writeLen) OVERRIDE;
+                        uint32 writeLen);
 
 private:
-    SocketServicePoll(const SocketServicePoll&) DELETED;
-    SocketServicePoll& operator=(const SocketServicePoll&) DELETED;
+    SocketService(const SocketService&) DELETED;
+    SocketService& operator=(const SocketService&) DELETED;
+
+    class AioWorker : public Thread
+    {
+    public:
+        AioWorker(SocketService* socketService);
+        void run() OVERRIDE;
+
+    private:
+        SocketService* _socketService;
+    };
+
+    class PollWorker : public Thread
+    {
+    public:
+        PollWorker(SocketService* socketService);
+        void run() OVERRIDE;
+
+    private:
+        SocketService* _socketService;
+    };
 
     class SockData;
 
@@ -122,9 +153,11 @@ private:
     void emptyWakePipe();
     void wakeup();
 
-    void enqueData(QueueEntry* queueEntry);
+    void dropSocket(AioSocket* aioSocket);
+    bool process();
+    bool poll();
 
-    static void* pollFunc(void* threadData);
+    void enqueData(QueueEntry* queueEntry);
 
     bool handleAcceptReady(SockData* sockData, Error& error);
     bool handleConnectReady(SockData* sockData, Error& error);
@@ -133,13 +166,14 @@ private:
     bool handleSendfileReady(SockData* sockData, Error& error);
 
 
-    AioServer* _aioServer;
-
-    pthread_t _pollThread;
     int _wakeupPipe[2];
 
     Condition _cond;
-    bool _shutdown;
+
+    List<AioWorker*> _threads;
+    PollWorker _pollWorker;
+
+    bool _isShutdown;
     List<pollfd> _pollfdList;
     HashMap<int, SockData> _dataMap;
     QueueEntry* _readyQueueHead;

@@ -13,7 +13,7 @@
 
 class AioSocket
 {
-    friend class AioServer;
+    friend class SocketService;
 
 public:
     AioSocket();
@@ -24,7 +24,7 @@ public:
     AioSocket& operator=(AioSocket&& other);
 
     void init(INetProt_Enum family);
-    void hardClose();
+    void close();
 
     void listen();
     void listen(int32 backlog);
@@ -35,11 +35,10 @@ private:
     AioSocket(const AioSocket& other) DELETED;
     AioSocket& operator=(const AioSocket& other) DELETED;
 
-    int _fd;
 
-    INetProt_Enum _family;
     SOCKET _winSocket;
-    AioServer* _owner;
+    INetProt_Enum _family;
+    SocketService* _owner;
 
     INetAddress _localAddress;
     uint32 _localPort;

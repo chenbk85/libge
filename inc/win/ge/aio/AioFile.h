@@ -16,7 +16,8 @@
  */
 class AioFile
 {
-    friend class AioServer;
+    friend class FileService;
+    friend class SocketService;
 
 public:
     AioFile();
@@ -30,7 +31,7 @@ private:
     AioFile& operator=(const AioFile& other) DELETED;
 
     HANDLE _handle;
-    AioServer* _owner;
+    FileService* _owner;
 };
 
 #endif // AIO_FILE_H

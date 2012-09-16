@@ -2,7 +2,7 @@
 
 #include "ge/aio/AioSocket.h"
 
-#include "ge/aio/AioServer.h"
+#include "ge/aio/SocketService.h"
 #include "ge/io/IOException.h"
 #include "gepriv/WinUtil.h"
 
@@ -27,7 +27,7 @@ AioSocket::~AioSocket()
     }
 }
 
-#if defined(HAVE_RVALUE)
+/*
 AioSocket::AioSocket(AioSocket&& other)
 {
 
@@ -42,7 +42,7 @@ AioSocket& AioSocket::operator=(AioSocket&& other)
 
     return *this;
 }
-#endif
+*/
 
 void AioSocket::init(INetProt_Enum family)
 {
@@ -91,17 +91,8 @@ void AioSocket::init(INetProt_Enum family)
     _family = family;
 }
 
-void AioSocket::hardClose()
+void AioSocket::close()
 {
-    // Start shutdown
-    int shutRet = ::shutdown(_winSocket, SD_SEND);
-
-    if (shutRet != 0)
-    {
-        // TODO: Log
-    }
-
-    // Close the socket
     int closeRet = ::closesocket(_winSocket);
 
     if (closeRet != 0)

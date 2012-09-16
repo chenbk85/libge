@@ -298,13 +298,13 @@ void HttpServer::addWriteData(HttpSession* session,
     {
         session->writeActive = true;
 
-        AioServer* aioServer = session->_aioServer;
+        SocketService* socketService = session->_socketService;
 
-        aioServer->socketWrite(&session->_socket,
-                               writeCallback,
-                               session,
-                               session->writeListHead->data,
-                               session->writeListHead->dataLen);
+        socketService->socketWrite(&session->_socket,
+                                   writeCallback,
+                                   session,
+                                   session->writeListHead->data,
+                                   session->writeListHead->dataLen);
     }
 
     session->lock.unlock();
@@ -414,21 +414,21 @@ HttpServer& HttpServer::operator=(HttpServer&& other)
     return *this;
 }
 
-void HttpServer::startServing(AioServer* aioServer,
+void HttpServer::startServing(SocketService* socketService,
                               uint32 port,
                               httpHandler_func handler)
 {
-    _aioServer = aioServer;
+    _socketService = socketService;
     _handler = handler;
 
     // Create some session objects (with sockets) for new connections
     _pendingSessionIpv4 = new HttpSession();
     _pendingSessionIpv4->_httpServer = this;
-    _pendingSessionIpv4->_aioServer = aioServer;
+    _pendingSessionIpv4->_socketService = socketService;
 
     _pendingSessionIpv6 = new HttpSession();
     _pendingSessionIpv6->_httpServer = this;
-    _pendingSessionIpv6->_aioServer = aioServer;
+    _pendingSessionIpv6->_socketService = socketService;
 
     // Bind the accept sockets to the designated port
     // This is the most likely thing to fail
@@ -442,33 +442,33 @@ void HttpServer::startServing(AioServer* aioServer,
     _acceptSockIpv6.listen();
 
     // Start accepting
-    _aioServer->socketAccept(&_acceptSockIpv4,
-                             &_pendingSessionIpv4->_socket,
-                             acceptCallback,
-                             _pendingSessionIpv4);
+    _socketService->socketAccept(&_acceptSockIpv4,
+                                 &_pendingSessionIpv4->_socket,
+                                 acceptCallback,
+                                 _pendingSessionIpv4);
 
-    _aioServer->socketAccept(&_acceptSockIpv6,
-                             &_pendingSessionIpv6->_socket,
-                             acceptCallback,
-                             _pendingSessionIpv6);
+    _socketService->socketAccept(&_acceptSockIpv6,
+                                 &_pendingSessionIpv6->_socket,
+                                 acceptCallback,
+                                 _pendingSessionIpv6);
 }
 
 void HttpServer::shutdown()
 {
-    // We do not shutdown the passed AioServer as we don't own it
+    // We do not shutdown the passed SocketService as we don't own it
     // But we do depend on it being shut down first
     // TODO: Add check
 
     // Close accepting sockets
     if (_pendingSessionIpv4 != NULL)
     {
-        _pendingSessionIpv4->_socket.hardClose();
+        _pendingSessionIpv4->_socket.close();
         delete _pendingSessionIpv4;
     }
 
     if (_pendingSessionIpv6 != NULL)
     {
-        _pendingSessionIpv6->_socket.hardClose();
+        _pendingSessionIpv6->_socket.close();
         delete _pendingSessionIpv6;
     }
 }
@@ -490,38 +490,38 @@ void HttpServer::acceptCallback(AioSocket* aioSocket,
     }
 
     HttpServer* httpServer = session->_httpServer;
-    AioServer* aioServer = httpServer->_aioServer;
+    SocketService* socketService = httpServer->_socketService;
 
     // Start reading
 
-    aioServer->socketRead(acceptedSocket,
-                          readCallback,
-                          session,
-                          session->lineBuffer,
-                          sizeof(session->lineBuffer));
+    socketService->socketRead(acceptedSocket,
+                              readCallback,
+                              session,
+                              session->lineBuffer,
+                              sizeof(session->lineBuffer));
 
     HttpSession* newSession = new HttpSession();
     newSession->_httpServer = httpServer;
-    newSession->_aioServer = aioServer;
+    newSession->_socketService = socketService;
 
     // Create new requests objects and accept again
     if (aioSocket == &httpServer->_acceptSockIpv4)
     {
         httpServer->_pendingSessionIpv4 = newSession;
 
-        aioServer->socketAccept(&httpServer->_acceptSockIpv4,
-                                &httpServer->_pendingSessionIpv4->_socket,
-                                acceptCallback,
-                                httpServer->_pendingSessionIpv4);
+        socketService->socketAccept(&httpServer->_acceptSockIpv4,
+                                    &httpServer->_pendingSessionIpv4->_socket,
+                                    acceptCallback,
+                                    httpServer->_pendingSessionIpv4);
     }
     else
     {
         httpServer->_pendingSessionIpv6 = newSession;
 
-        aioServer->socketAccept(&httpServer->_acceptSockIpv6,
-                                &httpServer->_pendingSessionIpv6->_socket,
-                                acceptCallback,
-                                httpServer->_pendingSessionIpv6);
+        socketService->socketAccept(&httpServer->_acceptSockIpv6,
+                                    &httpServer->_pendingSessionIpv6->_socket,
+                                    acceptCallback,
+                                    httpServer->_pendingSessionIpv6);
     }
 }
 
@@ -537,9 +537,7 @@ void HttpServer::readCallback(AioSocket* aioSocket,
     if (error.isSet())
     {
         Console::outln(String("readCallback: ") + error.toString());
-        session->_aioServer->socketClose(&session->_socket,
-                                         closeCallback,
-                                         session);
+        aioSocket->close();
         return;
     }
 
@@ -547,10 +545,7 @@ void HttpServer::readCallback(AioSocket* aioSocket,
     if (bytesTransfered == 0)
     {
         // TODO: Need to reference count
-        //AioServer* aioServer = session->_aioServer;
-        //aioServer->socketClose(aioSocket,
-        //                       closeCallback,
-        //                       session);
+        //aioSocket->close();
         return;
     }
 
@@ -562,29 +557,26 @@ void HttpServer::readCallback(AioSocket* aioSocket,
     // Close socket if indicated
     if (!keepSock)
     {
-        AioServer* aioServer = session->_aioServer;
-        aioServer->socketClose(aioSocket,
-                               closeCallback,
-                               session);
+        aioSocket->close();
         return;
     }
 
     // Trigger new read
     if (session->state == READING_BODY)
     {
-        session->_aioServer->socketRead(&session->_socket,
-                                        readCallback,
-                                        session,
-                                        session->content + session->contentIndex,
-                                        session->contentLen - session->contentIndex);
+        session->_socketService->socketRead(&session->_socket,
+                                            readCallback,
+                                            session,
+                                            session->content + session->contentIndex,
+                                            session->contentLen - session->contentIndex);
     }
     else if (session->state != RESPONDING)
     {
-        session->_aioServer->socketRead(&session->_socket,
-                                        readCallback,
-                                        session,
-                                        session->lineBuffer + session->lineBufferFilled,
-                                        sizeof(session->lineBuffer) - session->lineBufferFilled);
+        session->_socketService->socketRead(&session->_socket,
+                                            readCallback,
+                                            session,
+                                            session->lineBuffer + session->lineBufferFilled,
+                                            sizeof(session->lineBuffer) - session->lineBufferFilled);
     }
 }
 
@@ -789,9 +781,7 @@ void HttpServer::writeCallback(AioSocket* aioSocket,
     if (error.isSet())
     {
         Console::outln(String("writeCallback: ") + error.toString());
-        session->_aioServer->socketClose(&session->_socket,
-                                         closeCallback,
-                                         session);
+        aioSocket->close();
         return;
     }
 
@@ -810,11 +800,11 @@ void HttpServer::writeCallback(AioSocket* aioSocket,
     // Trigger new write if we have more data to write at the moment
     if (session->writeListHead != NULL)
     {
-        session->_aioServer->socketWrite(&session->_socket,
-                                         writeCallback,
-                                         session,
-                                         session->writeListHead->data,
-                                         session->writeListHead->dataLen);
+        session->_socketService->socketWrite(&session->_socket,
+                                             writeCallback,
+                                             session,
+                                             session->writeListHead->data,
+                                             session->writeListHead->dataLen);
     }
     else
     {
@@ -836,24 +826,6 @@ void HttpServer::writeCallback(AioSocket* aioSocket,
     // Close the session if everything has been written
     if (sessionComplete)
     {
-        session->_aioServer->socketClose(&session->_socket,
-                                         closeCallback,
-                                         session);
+        aioSocket->close();
     }
-}
-
-void HttpServer::closeCallback(AioSocket* aioSocket,
-                               void* userData,
-                               const Error& error)
-{
-    HttpSession* session = (HttpSession*)userData;
-
-    Console::outln("closeCallback");
-
-    if (error.isSet())
-    {
-        Console::outln(error.toString());
-    }
-
-    delete session;
 }

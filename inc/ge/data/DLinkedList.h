@@ -94,6 +94,7 @@ public:
     void popBack();
 
     size_t size() const;
+    bool isEmpty() const;
 
     ConstIterator iterator() const;
     Iterator iterator();
@@ -392,6 +393,12 @@ template <typename T>
 size_t DLinkedList<T>::size() const
 {
     return m_size;
+}
+
+template <typename T>
+bool DLinkedList<T>::isEmpty() const
+{
+    return m_size == 0;
 }
 
 template <typename T>

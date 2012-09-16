@@ -2,7 +2,6 @@
 
 #include "ge/aio/AioSocket.h"
 
-#include "ge/aio/AioServer.h"
 #include "ge/io/IOException.h"
 #include "gepriv/UnixUtil.h"
 
@@ -93,16 +92,8 @@ void AioSocket::init(INetProt_Enum family)
     _family = family;
 }
 
-void AioSocket::hardClose()
+void AioSocket::close()
 {
-    // Start shutdown
-    int shutRet = ::shutdown(_sockFd, SHUT_WR);
-
-    if (shutRet != 0)
-    {
-        // TODO: Log
-    }
-
     // Close the socket
     int closeRet = ::close(_sockFd);
 

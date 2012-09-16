@@ -69,7 +69,7 @@ void initializeX86Info()
     {
         // If this errors, you need VS2010 SP1 or later
         unsigned long long xcrFeatureMask = ::_xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-        x86info_hasAVX = (xcrFeatureMask & 0x6) || false;
+        x86info_hasAVX = (xcrFeatureMask & 0x6) == 0x6;
     }
     else
     {

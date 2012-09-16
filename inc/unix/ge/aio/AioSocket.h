@@ -4,18 +4,17 @@
 #define AIO_SOCKET_H
 
 #include <ge/common.h>
+#include <ge/aio/SocketService.h>
 #include <ge/inet/INet.h>
 #include <ge/inet/INetAddress.h>
 
-class AioServer;
+class SocketService;
 
 // TODO: Need access to source and dest address
 
 class AioSocket
 {
-    friend class AioServer;
-    friend class SocketServicePoll;
-    friend class SocketServiceEpoll;
+    friend class SocketService;
 
 public:
     AioSocket();
@@ -26,7 +25,7 @@ public:
     AioSocket& operator=(AioSocket&& other);
 
     void init(INetProt_Enum family);
-    void hardClose();
+    void close();
 
     void listen();
     void listen(int32 backlog);
@@ -39,7 +38,7 @@ private:
 
     INetProt_Enum _family;
     int _sockFd;
-    AioServer* _owner;
+    SocketService* _owner;
 
     INetAddress _localAddress;
     uint32 _localPort;

@@ -1,9 +1,10 @@
-//AioFile.cpp
+// AioFile.cpp
 
 #include "ge/aio/AioFile.h"
 
-#include "ge/aio/AioServer.h"
+#include "ge/aio/FileService.h"
 #include "ge/data/ShortList.h"
+#include "ge/io/IOException.h"
 #include "ge/text/UnicodeUtil.h"
 #include "gepriv/WinUtil.h"
 
@@ -24,7 +25,7 @@ AioFile::~AioFile()
     close();
 }
 
-Error AioFile::open(StringRef fileName, OpenMode_Enum mode, int permissions)
+void AioFile::open(StringRef fileName, OpenMode_Enum mode, int permissions)
 {
     ShortList<wchar_t, 256> uniName;
     DWORD access = 0;
@@ -75,9 +76,10 @@ Error AioFile::open(StringRef fileName, OpenMode_Enum mode, int permissions)
 
     if (_handle == INVALID_HANDLE_VALUE)
     {
-        return WinUtil::getError(::GetLastError(),
+        Error error = WinUtil::getError(::GetLastError(),
             "CreateFileW",
             "AioFile::open");
+        throw IOException(error);
     }
 
     // The OPEN_MODE_CREATE_OR_TRUNCATE requires manual truncation if we
@@ -90,9 +92,10 @@ Error AioFile::open(StringRef fileName, OpenMode_Enum mode, int permissions)
 
         if (!res)
         {
-            return WinUtil::getError(::GetLastError(),
+            Error error = WinUtil::getError(::GetLastError(),
                 "SetEndOfFile",
                 "AioFile::open");
+            throw IOException(error);
         }
     }
 
@@ -104,13 +107,12 @@ Error AioFile::open(StringRef fileName, OpenMode_Enum mode, int permissions)
 
     if (!bret)
     {
-        return WinUtil::getError(::GetLastError(),
+        Error error =  WinUtil::getError(::GetLastError(),
                 "SetFileCompletionNotificationModes",
                 "AioFile::open");
+        throw IOException(error);
     }
 #endif
-
-    return Error();
 }
 
 void AioFile::close()

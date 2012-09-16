@@ -40,7 +40,6 @@ SRCS = \
     src/unix/ge/Error.cpp \
     src/unix/ge/System.cpp \
     src/unix/ge/aio/AioFile.cpp \
-    src/unix/ge/aio/AioServer.cpp \
     src/unix/ge/aio/AioSocket.cpp \
     src/unix/ge/inet/INet.cpp \
     src/unix/ge/inet/INetAddress.cpp \

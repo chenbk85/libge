@@ -4,6 +4,7 @@
 #define HTTP_SERVER_REQUEST_H
 
 #include <ge/aio/AioSocket.h>
+#include <ge/aio/SocketService.h>
 #include <ge/data/List.h>
 #include <ge/http/Http.h>
 #include <ge/http/HttpServer.h>
@@ -97,7 +98,7 @@ private:
 
     void reset();
 
-    AioServer* _aioServer;
+    SocketService* _socketService;
     HttpServer* _httpServer;
     AioSocket _socket;
 

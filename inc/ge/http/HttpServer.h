@@ -3,8 +3,8 @@
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
 
-#include <ge/aio/AioServer.h>
 #include <ge/aio/AioSocket.h>
+#include <ge/aio/SocketService.h>
 #include <ge/data/List.h>
 #include <ge/http/Http.h>
 #include <ge/http/HttpSession.h>
@@ -44,11 +44,11 @@ public:
 
     /*! \brief Starts serving HTTP requests
      *
-     * \param aioServer       Aio server to run on
+     * \param socketService   SocketService to run on
      * \param port            Port to accept traffic on
      * \param handler         Handler function for HTTP requests
      */
-    void startServing(AioServer* aioServer,
+    void startServing(SocketService* socketService,
                       uint32 port,
                       httpHandler_func handler);
 
@@ -123,12 +123,8 @@ private:
                        uint32 bytesTransfered,
                        const Error& error);
 
-    static
-    void closeCallback(AioSocket* aioSocket,
-                       void* userData,
-                       const Error& error);
 
-    AioServer* _aioServer;
+    SocketService* _socketService;
     httpHandler_func _handler;
     AioSocket _acceptSockIpv4;
     AioSocket _acceptSockIpv6;
