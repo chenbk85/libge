@@ -428,14 +428,14 @@ DLinkedList<T>::ConstIterator::ConstIterator(typename DLinkedList<T>::Node* node
 }
 
 template <typename T>
-DLinkedList<T>::ConstIterator::ConstIterator(const DLinkedList<T>::ConstIterator& other) :
+DLinkedList<T>::ConstIterator::ConstIterator(const ConstIterator& other) :
     m_node(other.m_node)
 {
 }
 
 template <typename T>
 typename DLinkedList<T>::ConstIterator&
-    DLinkedList<T>::ConstIterator::operator=(const DLinkedList<T>::ConstIterator& other)
+    DLinkedList<T>::ConstIterator::operator=(const ConstIterator& other)
 {
     m_node = other.m_node;
     return *this;
@@ -491,14 +491,14 @@ DLinkedList<T>::Iterator::Iterator(typename DLinkedList<T>::Node* node) :
 }
 
 template <typename T>
-DLinkedList<T>::Iterator::Iterator(const DLinkedList<T>::Iterator& other) :
+DLinkedList<T>::Iterator::Iterator(const Iterator& other) :
     ConstIterator(other.m_node)
 {
 }
 
 template <typename T>
 typename DLinkedList<T>::Iterator&
-    DLinkedList<T>::Iterator::operator=(const DLinkedList<T>::Iterator& other)
+    DLinkedList<T>::Iterator::operator=(const Iterator& other)
 {
     this->m_node = other.m_node;
     return *this;

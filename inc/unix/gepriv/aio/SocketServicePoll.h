@@ -117,7 +117,6 @@ private:
         QueueEntry writeQueueEntry;
 
         AioSocket* aioSocket;
-        uint32 operMask;
 
         // Read data
         uint32 readOper;
@@ -127,6 +126,8 @@ private:
         char* readBuffer;
         uint32 readBufferPos;
         uint32 readBufferLen;
+        bool readComplete;
+        Error readError;
 
         // Write data
         uint32 writeOper;
@@ -135,6 +136,8 @@ private:
         char* writeBuffer;
         uint32 writeBufferPos;
         uint32 writeBufferLen;
+        bool writeComplete;
+        Error writeError;
 
         INetAddress connectAddress;
         int32 connectPort;
@@ -159,14 +162,18 @@ private:
 
     void enqueData(QueueEntry* queueEntry);
 
-    bool handleAcceptReady(SockData* sockData, Error& error);
-    bool handleConnectReady(SockData* sockData, Error& error);
-    bool handleReadReady(SockData* sockData, Error& error);
-    bool handleWriteReady(SockData* sockData, Error& error);
-    bool handleSendfileReady(SockData* sockData, Error& error);
+    void doAccept(SockData* sockData);
+    void doConnect(SockData* sockData);
+    void doRecv(SockData* sockData);
+    void doSend(SockData* sockData);
+    void doSendfile(SockData* sockData);
 
 
     int _wakeupPipe[2];
+
+    Condition _pauseCond;
+    bool _doPause;
+    bool _isPaused;
 
     Condition _cond;
 
@@ -174,7 +181,7 @@ private:
     PollWorker _pollWorker;
 
     bool _isShutdown;
-    List<pollfd> _pollfdList;
+    List<pollfd> _pollFdList;
     HashMap<int, SockData> _dataMap;
     QueueEntry* _readyQueueHead;
     QueueEntry* _readyQueueTail;

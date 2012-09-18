@@ -565,7 +565,7 @@ List<T>::ConstIterator::ConstIterator(const ConstIterator& other) :
 
 template<typename T>
 typename List<T>::ConstIterator&
-    List<T>::ConstIterator::operator=(const List<T>::ConstIterator& other)
+    List<T>::ConstIterator::operator=(const ConstIterator& other)
 {
     _owner = other._owner;
     _ptr = other._ptr;
@@ -628,7 +628,7 @@ List<T>::Iterator::Iterator(const Iterator& other) :
 
 template<typename T>
 typename List<T>::Iterator&
-    List<T>::Iterator::operator=(const List<T>::Iterator& other)
+    List<T>::Iterator::operator=(const Iterator& other)
 {
     this->_owner = other._owner;
     this->_ptr = other._ptr;

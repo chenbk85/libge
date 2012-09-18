@@ -64,6 +64,15 @@ typedef __int32 ssize_t;
 typedef wchar_t utf16;
 typedef unsigned __int32 utf32; // wchar32_t just an alias for now
 
+// Define NULL
+#if !defined(NULL)
+#if (_MSC_VER >= 1600)
+#define NULL nullptr
+#else
+#define NULL 0L
+#endif
+#endif
+
 // Define alignment macros
 #define ALIGN(X, Y) __declspec(align(Y)) X
 

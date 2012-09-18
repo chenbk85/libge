@@ -105,9 +105,9 @@ void SocketService::shutdown()
 }
 
 void SocketService::socketAccept(AioSocket* listenSocket,
-                                     AioSocket* acceptSocket,
-                                     SocketService::acceptCallback callback,
-                                     void* userData)
+                                 AioSocket* acceptSocket,
+                                 SocketService::acceptCallback callback,
+                                 void* userData)
 {
     if (listenSocket->_sockFd != -1)
     {
@@ -118,43 +118,37 @@ void SocketService::socketAccept(AioSocket* listenSocket,
 
     acceptSocket->init(listenSocket->_family);
 
+    SockData newData;
+    
+
     Locker<Condition> locker(_cond);
+
+    // TODO: Should check socket state?
 
     HashMap<int, SockData>::Iterator iter = _dataMap.get(listenSocket->_sockFd);
 
     if (iter.isValid())
     {
-        HashMap<int, SockData>::Entry entry = iter.value();
-        SockData& sockData = entry.getValue();
-
-        // TODO: Should check socket state?
-        if (sockData.operMask != 0)
-        {
-            throw IOException("Cannot accept on socket performing another operation");
-        }
-
-        sockData.operMask = POLLIN;
-        sockData.readOper = FLAG_ACCEPT;
-        sockData.readCallback = (void*)callback;
-        sockData.acceptSocket = acceptSocket;
-        sockData.readUserData = userData;
+        throw IOException("Cannot accept on socket performing another operation");
     }
-    else
+
+    // Create a SockData object
+    SockData sockData;
+    sockData.aioSocket = listenSocket;
+    sockData.readOper = FLAG_ACCEPT;
+    sockData.readCallback = (void*)callback;
+    sockData.acceptSocket = acceptSocket;
+    sockData.readUserData = userData;
+
+    // Try to accept
+    doAccept(&sockData);
+
+    // Add to the data map and wake the poller if didn't immediately complete 
+    if (!sockData.readComplete)
     {
-        SockData newData;
-
-        newData.aioSocket = listenSocket;
-        newData.operMask = POLLIN;
-        newData.readOper = FLAG_ACCEPT;
-        newData.readCallback = (void*)callback;
-        newData.acceptSocket = acceptSocket;
-        newData.readUserData = userData;
-
         _dataMap.put(listenSocket->_sockFd, newData);
+        wakeup();
     }
-
-    locker.unlock();
-    wakeup();
 }
 
 void SocketService::socketConnect(AioSocket* aioSocket,
@@ -169,39 +163,26 @@ void SocketService::socketConnect(AioSocket* aioSocket,
 
     if (iter.isValid())
     {
-        HashMap<int, SockData>::Entry entry = iter.value();
-        SockData& sockData = entry.getValue();
-
-        // TODO: Should check socket state?
-        if (sockData.operMask != 0)
-        {
-            throw IOException("Cannot connect on socket performing another operation");
-        }
-
-        sockData.operMask = POLLOUT;
-        sockData.writeOper = FLAG_CONNECT;
-        sockData.writeCallback = (void*)callback;
-        sockData.writeUserData = userData;
-        sockData.connectAddress = address;
-        sockData.connectPort = port;
+        throw IOException("Cannot connect on socket performing another operation");
     }
-    else
+
+    SockData sockData;
+    sockData.aioSocket = aioSocket;
+    sockData.writeOper = FLAG_CONNECT;
+    sockData.writeCallback = (void*)callback;
+    sockData.writeUserData = userData;
+    sockData.connectAddress = address;
+    sockData.connectPort = port;
+
+    // Try to connect
+    doConnect(&sockData);
+
+    // Add to the data map and wake the poller if didn't immediately complete 
+    if (!sockData.writeComplete)
     {
-        SockData newData;
-
-        newData.aioSocket = aioSocket;
-        newData.operMask = POLLOUT;
-        newData.writeOper = FLAG_CONNECT;
-        newData.writeCallback = (void*)callback;
-        newData.writeUserData = userData;
-        newData.connectAddress = address;
-        newData.connectPort = port;
-
-        _dataMap.put(aioSocket->_sockFd, newData);
+        _dataMap.put(aioSocket->_sockFd, sockData);
+        wakeup();
     }
-
-    locker.unlock();
-    wakeup();
 }
 
 void SocketService::socketRead(AioSocket* aioSocket,
@@ -212,41 +193,42 @@ void SocketService::socketRead(AioSocket* aioSocket,
 {
     Locker<Condition> locker(_cond);
 
+    SockData newData;
+    SockData& sockData = newData;
+
+    // TODO: Should check socket state?
+
     HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
     if (iter.isValid())
     {
         HashMap<int, SockData>::Entry entry = iter.value();
-        SockData& sockData = entry.getValue();
+        sockData = entry.getValue();
 
-        // TODO: Should check socket state?
-
-        sockData.operMask |= POLLIN;
-        sockData.readOper = FLAG_READ;
-        sockData.readCallback = (void*)callback;
-        sockData.readUserData = userData;
-        sockData.readBuffer = buffer;
-        sockData.readBufferPos = 0;
-        sockData.readBufferLen = bufferLen;
+        if (sockData.readOper != 0)
+        {
+            throw IOException("Cannot read from socket with read operation already in progress");
+        }
     }
-    else
+
+    sockData.aioSocket = aioSocket;
+    sockData.readOper = FLAG_READ;
+    sockData.readCallback = (void*)callback;
+    sockData.readUserData = userData;
+    sockData.readBuffer = buffer;
+    sockData.readBufferPos = 0;
+    sockData.readBufferLen = bufferLen;
+
+    // Try to recv
+    doRecv(&sockData);
+
+    // Add to the data map and wake the poller if didn't immediately complete 
+    if (!sockData.readComplete &&
+        !iter.isValid())
     {
-        SockData newData;
-
-        newData.aioSocket = aioSocket;
-        newData.operMask = POLLIN;
-        newData.readOper = FLAG_READ;
-        newData.readCallback = (void*)callback;
-        newData.readUserData = userData;
-        newData.readBuffer = buffer;
-        newData.readBufferPos = 0;
-        newData.readBufferLen = bufferLen;
-
         _dataMap.put(aioSocket->_sockFd, newData);
+        wakeup();
     }
-
-    locker.unlock();
-    wakeup();
 }
 
 void SocketService::socketWrite(AioSocket* aioSocket,
@@ -257,6 +239,11 @@ void SocketService::socketWrite(AioSocket* aioSocket,
 {
     Locker<Condition> locker(_cond);
 
+    SockData newData;
+    SockData& sockData = newData;
+
+    // TODO: Should check socket state?
+
     HashMap<int, SockData>::Iterator iter = _dataMap.get(aioSocket->_sockFd);
 
     if (iter.isValid())
@@ -264,34 +251,30 @@ void SocketService::socketWrite(AioSocket* aioSocket,
         HashMap<int, SockData>::Entry entry = iter.value();
         SockData& sockData = entry.getValue();
 
-        // TODO: Should check socket state?
-
-        sockData.operMask |= POLLOUT;
-        sockData.writeOper = FLAG_WRITE;
-        sockData.writeCallback = (void*)callback;
-        sockData.writeUserData = userData;
-        sockData.writeBuffer = (char*)buffer;
-        sockData.writeBufferPos = 0;
-        sockData.writeBufferLen = bufferLen;
+        if (sockData.writeOper != 0)
+        {
+            throw IOException("Cannot write to socket with write operation already in progress");
+        }
     }
-    else
+    
+    sockData.aioSocket = aioSocket;
+    sockData.writeOper = FLAG_WRITE;
+    sockData.writeCallback = (void*)callback;
+    sockData.writeUserData = userData;
+    sockData.writeBuffer = (char*)buffer;
+    sockData.writeBufferPos = 0;
+    sockData.writeBufferLen = bufferLen;
+
+    // Try to recv
+    doSend(&sockData);
+
+    // Add to the data map and wake the poller if didn't immediately complete 
+    if (!sockData.writeComplete &&
+        !iter.isValid())
     {
-        SockData newData;
-
-        newData.aioSocket = aioSocket;
-        newData.operMask = POLLOUT;
-        newData.writeOper = FLAG_WRITE;
-        newData.writeCallback = (void*)callback;
-        newData.writeUserData = userData;
-        newData.writeBuffer = (char*)buffer;
-        newData.writeBufferPos = 0;
-        newData.writeBufferLen = bufferLen;
-
         _dataMap.put(aioSocket->_sockFd, newData);
+        wakeup();
     }
-
-    locker.unlock();
-    wakeup();
 }
 
 void SocketService::socketSendFile(AioSocket* aioSocket,
@@ -313,8 +296,11 @@ void SocketService::socketSendFile(AioSocket* aioSocket,
         SockData& sockData = entry.getValue();
 
         // TODO: Should check socket state?
+        if (sockData.writeOper != 0)
+        {
+            throw IOException("Cannot write to socket with write operation already in progress");
+        }
 
-        sockData.operMask |= POLLOUT;
         sockData.writeOper = FLAG_SENDFILE;
         sockData.writeCallback = (void*)callback;
         sockData.writeUserData = userData;
@@ -332,7 +318,6 @@ void SocketService::socketSendFile(AioSocket* aioSocket,
         SockData newData;
 
         newData.aioSocket = aioSocket;
-        newData.operMask = POLLOUT;
         newData.writeOper = FLAG_SENDFILE;
         newData.writeCallback = (void*)callback;
         newData.writeUserData = userData;
@@ -372,7 +357,7 @@ void SocketService::wakeup()
     } while (res == -1 && errno == EINTR);
 }
 
-bool SocketService::handleAcceptReady(SockData* sockData, Error& error)
+void SocketService::doAccept(SockData* sockData)
 {
     INetProt_Enum family;
     sockaddr_in ipv4Address;
@@ -410,7 +395,7 @@ bool SocketService::handleAcceptReady(SockData* sockData, Error& error)
     {
         // Accept succeeded
         sockData->acceptSocket->_sockFd = ret;
-        return true;
+        sockData->readComplete = true;
     }
     else
     {
@@ -420,17 +405,15 @@ bool SocketService::handleAcceptReady(SockData* sockData, Error& error)
         // If the error is that it would block, just keep going
         if (err != EAGAIN || err != EWOULDBLOCK)
         {
-            error = UnixUtil::getError(errno,
+            sockData->readError = UnixUtil::getError(errno,
                 "SocketService::accept",
                 "accept");
-            return true;
+            sockData->readComplete = true;
         }
     }
-
-    return false;
 }
 
-bool SocketService::handleConnectReady(SockData* sockData, Error& error)
+void SocketService::doConnect(SockData* sockData)
 {
     sockaddr_in ipv4SockAddr;
     sockaddr_in6 ipv6SockAddr;
@@ -482,7 +465,7 @@ bool SocketService::handleConnectReady(SockData* sockData, Error& error)
     if (res == 0)
     {
         // Success
-        return true;
+        sockData->writeComplete = true;
     }
     else
     {
@@ -490,16 +473,15 @@ bool SocketService::handleConnectReady(SockData* sockData, Error& error)
 
         if (err != EINPROGRESS)
         {
-            error = UnixUtil::getError(err,
+            sockData->writeError = UnixUtil::getError(err,
                 "SocketService::connect",
                 "connect");
-            return true;
+            sockData->writeComplete = true;
         }
     }
-    return false;
 }
 
-bool SocketService::handleReadReady(SockData* sockData, Error& error)
+void SocketService::doRecv(SockData* sockData)
 {
     ssize_t res;
     int err;
@@ -522,8 +504,8 @@ bool SocketService::handleReadReady(SockData* sockData, Error& error)
 
     if (res != -1)
     {
-        sockData->writeBufferPos = res;
-        return true;
+        sockData->readBufferPos = res;
+        sockData->readComplete = true;
     }
     else
     {
@@ -532,24 +514,64 @@ bool SocketService::handleReadReady(SockData* sockData, Error& error)
         if (err != EAGAIN &&
             err != EWOULDBLOCK)
         {
-            error = UnixUtil::getError(err,
-                "SocketService::read",
+            sockData->readError = UnixUtil::getError(err,
+                "SocketService::submitRecv",
                 "recv");
-            return true;
+            sockData->readComplete = true;
         }
     }
-
-    return false;
 }
 
-bool SocketService::handleWriteReady(SockData* sockData, Error& error)
+void SocketService::doSend(SockData* sockData)
 {
-    return false;
+    ssize_t res;
+    int err;
+    size_t sendLen;
+
+    sendLen = sockData->writeBufferLen - sockData->writeBufferPos;
+
+    // Prevent overflow to negative
+    if (sendLen > INT_MAX)
+        sendLen = INT_MAX;
+
+    int flags = 0;
+
+#ifdef MSG_NOSIGNAL
+    flags = MSG_NOSIGNAL;
+#endif
+
+    do
+    {
+        res = ::send(sockData->aioSocket->_sockFd,
+                     sockData->writeBuffer + sockData->writeBufferPos,
+                     sendLen,
+                     flags);
+    }
+    while (res == -1 && errno == EINTR);
+
+    if (res != -1)
+    {
+        sockData->writeBufferPos += res;
+        sockData->writeComplete = true;
+    }
+    else
+    {
+        err = errno;
+
+        if (err != EAGAIN &&
+            err != EWOULDBLOCK)
+        {
+            sockData->writeError = UnixUtil::getError(err,
+                "SocketService::submitSend",
+                "send");
+            sockData->writeComplete = true;
+        }
+    }
 }
 
-bool SocketService::handleSendfileReady(SockData* sockData, Error& error)
+void SocketService::doSendfile(SockData* sockData)
 {
-    return false;
+
 }
 
 void SocketService::dropSocket(AioSocket* aioSocket)
@@ -598,9 +620,9 @@ bool SocketService::process()
         {
             if (sockData->readOper == FLAG_ACCEPT)
             {
-                operComplete = handleAcceptReady(sockData, error);
+                doAccept(sockData);
 
-                if (operComplete)
+                if (sockData->readComplete)
                 {
                     SocketService::acceptCallback callback = (SocketService::acceptCallback)sockData->readCallback;
                     callback(sockData->aioSocket,
@@ -611,9 +633,9 @@ bool SocketService::process()
             }
             else if (sockData->readOper == FLAG_READ)
             {
-                operComplete = handleReadReady(sockData, error);
+                doRecv(sockData);
 
-                if (operComplete)
+                if (sockData->readComplete)
                 {
                     SocketService::socketCallback callback = (SocketService::socketCallback)sockData->readCallback;
                     callback(sockData->aioSocket,
@@ -625,7 +647,47 @@ bool SocketService::process()
         }
         else
         {
+            if (sockData->writeOper == FLAG_CONNECT)
+            {
+                doAccept(sockData);
 
+                if (sockData->writeComplete)
+                {
+                    SocketService::acceptCallback callback = (SocketService::acceptCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->acceptSocket,
+                             sockData->writeUserData,
+                             error);
+                }
+            }
+            else if (sockData->writeOper == FLAG_WRITE)
+            {
+                doSend(sockData);
+
+                if (sockData->writeComplete)
+                {
+                    SocketService::connectCallback callback = (SocketService::connectCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->writeUserData,
+                             error);
+                }
+            }
+            else if (sockData->writeOper == FLAG_SENDFILE)
+            {
+                doSendfile(sockData);
+
+                if (sockData->writeComplete)
+                {
+                    // TODO
+                    /*
+                    SocketService::socketCallback callback = (SocketService::socketCallback)sockData->readCallback;
+                    callback(sockData->aioSocket,
+                             sockData->writeUserData,
+                             sockData->readBufferPos,
+                             error);
+                    */
+                }
+            }
         }
     }
 
@@ -634,7 +696,208 @@ bool SocketService::process()
 
 bool SocketService::poll()
 {
-    return false;
+    Locker<Condition> mainLocker(_cond);
+
+    if (_isShutdown)
+        return false;
+
+    // Fill in the pollfd data
+    _pollFdList.clear();
+
+    size_t pollIndex = 0;
+    HashMap<int, SockData>::ConstIterator mapIter = _dataMap.iterator();
+
+    while (mapIter.isValid())
+    {
+        HashMap<int, SockData>::Entry entry = mapIter.value();
+        int fd = entry.getKey();
+        SockData& sockData = entry.getValue();
+
+        pollfd pollData;
+        pollData.fd = fd;
+        pollData.events = 0;
+        pollData.revents = 0;
+        
+        if (sockData.readOper != 0 &&
+            !sockData.readComplete)
+        {
+            pollData.events |= POLLIN;
+        }
+
+        if (sockData.writeOper != 0 &&
+            !sockData.writeComplete)
+        {
+            pollData.events |= POLLOUT;
+        }
+
+        _pollFdList.addBack(pollData);
+
+        pollIndex++;
+    }
+
+    // Unlock the main condition and call poll
+    mainLocker.unlock();
+
+    int pollRet;
+    
+    do
+    {
+        pollRet = ::poll(_pollFdList.data(), _pollFdList.size(), -1);
+    }
+    while (pollRet == -1 && errno == EINTR);
+
+    if (pollRet == -1)
+    {
+        // Not much we can do if poll failed
+        // TODO: Log
+        // TODO: Shutdown?
+        return false;
+    }
+
+    // If you close a FD passed to poll, prior to the poll returning, you
+    // can get errors relating to invalid FDs. To avoid this, a thread desiring
+    // to remove a FD can write to the wake pipe, indicate this thread should
+    // wait, do the removal and indicate it can stop waiting. This causes a
+    // bit of churn, but it's hard to avoid.
+    Locker<Condition> pauseLocker(_pauseCond);
+
+    if (_doPause)
+    {
+        _isPaused = true;
+
+        while (_doPause)
+        {
+            _pauseCond.wait();
+        }
+
+        _isPaused = false;
+        _pauseCond.signal(); // TODO: Need?
+        return true;
+    }
+
+    pauseLocker.unlock();
+
+    // Grab the main condition's lock again
+    mainLocker.lock();
+
+    if (_isShutdown)
+        return false;
+
+    // Now we walk through our happy set of results
+    for (int i = 0; i < pollRet; i++)
+    {
+        pollfd& pollData = _pollFdList.get(i);
+
+        // Ignore the wakeup pipe
+        if (pollData.fd == _wakeupPipe[0])
+            continue;
+
+        HashMap<int, SockData>::ConstIterator iter = _dataMap.get(pollData.fd);
+        HashMap<int, SockData>::Entry entry = iter.value();
+
+        SockData& sockData = entry.getValue();
+
+        bool queueRead = false;
+        bool queueWrite = false;
+
+        // Handle flags indicating a socket issues first
+        if ((pollData.revents | POLLERR) != 0)
+        {
+            // The socket itself is dead somehow
+
+            int errVal = -1;
+            socklen_t optLen = sizeof(errVal);
+            int optRet = ::getsockopt(pollData.fd, SOL_SOCKET, SO_ERROR, &errVal, &optLen);
+
+            if (optRet == -1)
+            {
+                // TODO: Not much we can do but log
+            }
+
+            if (sockData.readOper != 0)
+            {
+                sockData.readError = UnixUtil::getError(errVal,
+                    "SocketService::?", // TODO: Mapping?
+                    "poll");
+                queueRead = true;
+            }
+
+            if (sockData.writeOper != 0)
+            {
+                sockData.writeError = UnixUtil::getError(errVal,
+                    "SocketService::?", // TODO: Mapping?
+                    "poll");
+                queueWrite = true;
+            }
+        }
+        else if ((pollData.revents | POLLNVAL) != 0)
+        {
+            // The FD is somehow bad. This shouldn't be possible, but pass it on to both sides.
+
+            if (sockData.readOper != 0)
+            {
+                sockData.readError = UnixUtil::getError(EBADF,
+                    "SocketService::?", // TODO: Mapping?
+                    "poll");
+                queueRead = true;
+            }
+
+            if (sockData.writeOper != 0)
+            {
+                sockData.writeError = UnixUtil::getError(EBADF,
+                    "SocketService::?", // TODO: Mapping?
+                    "poll");
+                queueWrite = true;
+            }
+        }
+        else
+        {
+            // Handle valid output cases
+            if ((pollData.revents | POLLHUP) != 0)
+            {
+                // This indicates the write side of the socket on our side is shutdown
+
+                sockData.writeError = UnixUtil::getError(EBADF,
+                    "SocketService::?", // TODO: Mapping?
+                    "poll");
+                queueWrite = true;
+            }
+            else if ((pollData.revents | POLLOUT) != 0)
+            {
+                queueWrite = true;
+            }
+            
+            // Handle valid input cases
+            if ((pollData.revents | POLLIN) != 0)
+            {
+                queueRead = true;
+            }
+        }
+
+        if (queueRead)
+            enqueData(&sockData.readQueueEntry);
+
+        if (queueWrite)
+            enqueData(&sockData.writeQueueEntry);
+    }
+
+    return true;
+}
+
+void SocketService::enqueData(QueueEntry* queueEntry)
+{
+    if (_readyQueueHead == NULL)
+    {
+        queueEntry->prev = NULL;
+        _readyQueueHead = queueEntry;
+        _readyQueueTail = queueEntry;
+    }
+    else
+    {
+        _readyQueueTail->next = queueEntry;
+    }
+
+    queueEntry->next = NULL;
 }
 
 // Inner Classes ------------------------------------------------------------
@@ -676,7 +939,6 @@ void SocketService::PollWorker::run()
 
 SocketService::SockData::SockData() :
     aioSocket(NULL),
-    operMask(0),
     readOper(0),
     acceptSocket(NULL),
     readCallback(NULL),
@@ -684,12 +946,14 @@ SocketService::SockData::SockData() :
     readBuffer(NULL),
     readBufferPos(0),
     readBufferLen(0),
+    readComplete(false),
     writeOper(0),
     writeCallback(NULL),
     writeUserData(NULL),
     writeBuffer(NULL),
     writeBufferPos(0),
     writeBufferLen(0),
+    writeComplete(false),
     connectPort(0),
     sendFileFd(-1),
     sendFileBuf(NULL),
