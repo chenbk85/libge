@@ -1,7 +1,7 @@
-// FileServiceLinuxAio.h
+// FileServiceLinux.h
 
-#ifndef FILE_SERVICE_LINUX_AIO_H
-#define FILE_SERVICE_LINUX_AIO_H
+#ifndef FILE_SERVICE_LINUX_H
+#define FILE_SERVICE_LINUX_H
 
 #ifdef __linux__
 
@@ -44,4 +44,4 @@ private:
 
 #endif // #ifdef __linux__
 
-#endif // FILE_SERVICE_LINUX_AIO_H
+#endif // FILE_SERVICE_LINUX_H

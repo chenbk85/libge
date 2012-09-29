@@ -1,6 +1,8 @@
-// AioSocket.cpp
+// AioSocketPoll.cpp
 
-#include "ge/aio/AioSocket.h"
+#ifndef __linux__
+
+#include "gepriv/aio/AioSocketPoll.h"
 
 #include "ge/io/IOException.h"
 #include "gepriv/UnixUtil.h"
@@ -200,3 +202,5 @@ void AioSocket::bind(const INetAddress& address, int port)
 
     _flags |= BIND_FLAG;
 }
+
+#endif // !__linux__

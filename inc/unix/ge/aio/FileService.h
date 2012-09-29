@@ -3,8 +3,6 @@
 #ifndef FILE_SERVICE_H
 #define FILE_SERVICE_H
 
-#include <ge/common.h>
-
 /*
  * Server that allows asynchronous operations on files.
  * 

@@ -6,7 +6,7 @@
 #define SOCKET_SERVICE_EPOLL_H
 
 #include <ge/aio/AioServer.h>
-#include <gepriv/aio/SocketService.h>
+#include <gepriv/aio/SocketServiceEpoll.h>
 
 
 /*

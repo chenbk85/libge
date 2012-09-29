@@ -39,8 +39,6 @@ SRCS = \
     src/ge/util/UtilData.cpp \
     src/unix/ge/Error.cpp \
     src/unix/ge/System.cpp \
-    src/unix/ge/aio/AioFile.cpp \
-    src/unix/ge/aio/AioSocket.cpp \
     src/unix/ge/inet/INet.cpp \
     src/unix/ge/inet/INetAddress.cpp \
     src/unix/ge/inet/Socket.cpp \
@@ -58,6 +56,10 @@ SRCS = \
     src/unix/ge/util/Double.cpp \
     src/unix/ge/util/Float.cpp \
     src/unix/gepriv/UnixUtil.cpp \
+    src/unix/gepriv/aio/AioFileBlocking.cpp \
+    src/unix/gepriv/aio/AioFileLinux.cpp \
+    src/unix/gepriv/aio/AioSocketEpoll.cpp \
+    src/unix/gepriv/aio/AioSocketPoll.cpp \
     src/unix/gepriv/aio/FileServiceBlocking.cpp \
     src/unix/gepriv/aio/FileServiceLinuxAio.cpp \
     src/unix/gepriv/aio/SocketServicePoll.cpp \

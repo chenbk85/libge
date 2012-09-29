@@ -5,11 +5,11 @@
 
 #ifndef __linux__
 
-#include <ge/aio/AioFile.h>
 #include <ge/data/DLinkedList.h>
 #include <ge/data/List.h>
 #include <ge/thread/Condition.h>
 #include <ge/thread/Thread.h>
+#include <gepriv/aio/AioFileBlocking.h>
 
 class AioFile;
 

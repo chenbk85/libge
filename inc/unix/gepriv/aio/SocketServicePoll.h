@@ -4,13 +4,13 @@
 #define SOCKET_SERVICE_POLL_H
 
 #include <ge/Error.h>
-#include <ge/aio/AioFile.h>
-#include <ge/aio/AioSocket.h>
 #include <ge/data/HashMap.h>
 #include <ge/data/List.h>
 #include <ge/inet/INetAddress.h>
 #include <ge/thread/Condition.h>
 #include <ge/thread/Thread.h>
+#include <gepriv/aio/AioFileBlocking.h>
+#include <gepriv/aio/AioSocketPoll.h>
 
 #include <poll.h>
 

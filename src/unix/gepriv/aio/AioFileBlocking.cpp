@@ -1,9 +1,11 @@
-// AioFile.cpp
+// AioFileBlocking.cpp
+
+#ifndef __linux__
 
 // Indicate to Linux headers that we can support 64 bit file offsets
 #define _FILE_OFFSET_BITS 64
 
-#include "ge/aio/AioFile.h"
+#include "gepriv/aio/AioFileBlocking.h"
 
 #include "ge/data/ShortList.h"
 #include "ge/io/IOException.h"
@@ -105,3 +107,5 @@ void AioFile::close()
 
     _fd = -1;
 }
+
+#endif // !__linux__
